@@ -13,7 +13,7 @@ test('engine readiness retries refused connections until the engine starts', asy
   const starting = delay(50).then(() => new Promise((resolve) => server.listen(port, '127.0.0.1', resolve)));
   try {
     await waitForEngine(engine, { timeoutMs: 5000, pollIntervalMs: 10, connectTimeoutMs: 50 });
-    await starting;
+    assert.equal(server.listening, true, 'Readiness must wait until the engine starts listening');
   } finally {
     await starting;
     await new Promise((resolve) => server.close(resolve));

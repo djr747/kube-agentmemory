@@ -104,7 +104,10 @@ try {
     data: { 'cookie-secret': cookieSecret.toString('base64') } };
   kube(['apply', '-f', '-'], { input: stringify(oauthSecret), stdio: ['pipe', 'inherit', 'inherit'] });
   const fixture = [
-    { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'oidc-fixture' }, data: { 'server.mjs': readFileSync('tests/fixtures/oidc-fixture.mjs', 'utf8') } },
+    { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'oidc-fixture' }, data: {
+      'server.mjs': readFileSync('tests/fixtures/oidc-fixture.mjs', 'utf8'),
+      'service-client.mjs': readFileSync('tests/fixtures/service-client.mjs', 'utf8'),
+    } },
     { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: 'oidc-fixture' }, spec: { replicas: 1, selector: { matchLabels: { app: 'oidc-fixture' } }, template: {
       metadata: { labels: { app: 'oidc-fixture' } }, spec: { automountServiceAccountToken: false,
         securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: 'RuntimeDefault' } },

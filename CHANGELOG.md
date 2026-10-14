@@ -21,7 +21,7 @@
   checksum-verified npm and shell-free nonroot app/engine runtimes.
 - Shared locked npm tooling for CI and builds to preserve platform metadata
   during dependency-lock freshness checks.
-- API OIDC integration waits for replacement Service routing before checking
+- API bearer/OIDC integration waits for replacement Service routing before checking
   authentication, while preserving strict HTTP and NetworkPolicy assertions.
 - Hardened npm bootstrap destinations and private extraction directories,
   script-free CI installation, bounded worker downloads, simpler credential and
