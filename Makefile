@@ -10,6 +10,7 @@ check:
 	node --check tests/package-chart.mjs
 	node --check tests/sync-release.mjs
 	node --check tests/registry-digest.mjs
+	node --check tests/publish-release.mjs
 test: check
 	npm test
 audit:

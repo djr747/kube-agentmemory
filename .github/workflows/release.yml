@@ -10,6 +10,7 @@ jobs:
     outputs:
       version: ${{ steps.metadata.outputs.version }}
       tags: ${{ steps.metadata.outputs.tags }}
+      already_published: ${{ steps.preflight.outputs.already_published }}
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -22,18 +23,15 @@ jobs:
         run: node tests/release-metadata.mjs
       - name: Verify tested source revision
         run: test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
-      - name: Refuse an existing release version before publishing
+      - name: Check release version and retry state before publishing
+        id: preflight
         env:
-          VERSION: ${{ steps.metadata.outputs.version }}
-        run: |
-          if git show-ref --verify --quiet "refs/tags/v$VERSION"; then
-            echo '::error::Version already released. Bump package/chart/lock/changelog on develop.'
-            exit 1
-          fi
+          GH_TOKEN: ${{ github.token }}
+        run: node tests/publish-release.mjs --check
 
   images:
     needs: prepare
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.prepare.outputs.already_published != 'true'
     runs-on: ubuntu-24.04
     permissions:
       packages: write
@@ -59,7 +57,7 @@ jobs:
 
   artifacts:
     needs: [prepare, images]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main' && needs.prepare.outputs.already_published != 'true'
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -168,7 +166,4 @@ jobs:
             cp "reports/reports-$arch/sbom.spdx.json" "release-assets/app-$arch.spdx.json"
             cp "reports/reports-$arch/engine-sbom.spdx.json" "release-assets/engine-$arch.spdx.json"
           done
-          tag_object="$(gh api "repos/$GITHUB_REPOSITORY/git/tags" -f tag="v$VERSION" -f message="Release v$VERSION" -f object="$GITHUB_SHA" -f type=commit --jq .sha)"
-          gh api "repos/$GITHUB_REPOSITORY/git/refs" -f ref="refs/tags/v$VERSION" -f sha="$tag_object"
-          gh release create "v$VERSION" --verify-tag --title "Release v$VERSION" --notes-file release-notes.md \
-            "dist/kube-agentmemory-$VERSION.tgz" release-assets/*.json
+          node tests/publish-release.mjs

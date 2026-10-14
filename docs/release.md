@@ -27,7 +27,9 @@ release version.
 
 After CI succeeds on main, the reusable release workflow:
 
-1. Checks the source revision and refuses an existing `vX.Y.Z` tag.
+1. Checks the source revision and remote release state. An existing `vX.Y.Z`
+   tag must be annotated and point to that exact tested commit; a published
+   matching release makes publication a no-op.
 2. Uploads the **exact tested** amd64/arm64 app and engine images and assembles
    their immutable multi-platform indexes; it does not rebuild the candidates.
 3. Signs both index digests with keyless Cosign using GitHub OIDC and attaches
@@ -37,7 +39,8 @@ After CI succeeds on main, the reusable release workflow:
    stored in GitHub.
 5. Applies version/upstream/`latest` aliases to the signed digests, publishes the
    tested OCI chart, creates an annotated `vX.Y.Z` tag at the tested main commit,
-   and creates the GitHub Release with that existing tag.
+   and creates a draft GitHub Release with that existing tag. It uploads all
+   release assets before publishing the draft.
 
 Signing/provenance must succeed before release aliases and the chart are
 published. The release includes the chart, per-architecture app/engine SPDX SBOMs
@@ -48,8 +51,11 @@ artifact attestations are available for public repositories on free plans; check
 if using a private fork. Bump the
 version for every main release; do not pre-create a release tag. Publication is
 not atomic across GHCR and GitHub: a failed run may leave partial artifacts.
-Inspect them before rerunning the same main workflow; do not silently overwrite
-an existing released version.
+Rerun the same main workflow at the same commit to recover: it reuses a matching
+tag and draft, replaces partial draft assets and publishes only after every upload
+succeeds. Published GitHub Releases are left untouched, and a tag pointing to
+another commit blocks publication before registry changes. Fixes on a different
+commit require a new version. No tag deletion or forced tag update is needed.
 
 For both image repositories, the initial release aliases are:
 
@@ -97,7 +103,8 @@ are attached to the architecture image digests referenced by the signed index;
 the release also provides their readable JSON files. See the official
 [Cosign signing/verification guide](https://docs.sigstore.dev/cosign/signing/signing_with_containers/).
 
-The workflow configuration and local release checks can be tested without
-publishing. Keyless signing, registry attestation uploads and GitHub Release
+The workflow configuration and release retry cases are tested without publishing,
+including failures after tag creation, draft creation and partial asset uploads.
+Keyless signing, registry attestation uploads and GitHub Release
 creation need a real main GitHub Actions run; local tests do not prove those
 external operations.

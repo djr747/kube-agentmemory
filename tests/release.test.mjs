@@ -7,6 +7,7 @@ import { join } from 'node:path';
 import { resolve } from 'node:path';
 import { parse } from 'yaml';
 import { releaseMetadata } from './helpers/release-metadata.mjs';
+import { checkRelease, publishRelease } from './helpers/github-release.mjs';
 
 test('version source, dependency lock, paired engine, chart and changelog agree', () => {
   const pkg = JSON.parse(readFileSync('package.json'));
@@ -89,16 +90,20 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   assert.ok(ci.jobs.container.steps.some((s) => s.with?.name === 'chart' && s.with.path === 'dist'));
   assert.equal(ci.jobs.container.steps.find((s) => s.name === 'Test packaged chart with local embeddings').env.CHART_ARCHIVE_DIR, 'dist');
   assert.deepEqual(Object.keys(release.on), ['workflow_call']);
-  for (const job of Object.values(release.jobs)) assert.equal(job.if, condition);
+  assert.equal(release.jobs.prepare.if, condition);
+  for (const job of [release.jobs.images, release.jobs.artifacts]) {
+    assert.equal(job.if, `${condition} && needs.prepare.outputs.already_published != 'true'`);
+  }
+  const preflight = release.jobs.prepare.steps.find((s) => s.id === 'preflight');
+  assert.equal(preflight.run, 'node tests/publish-release.mjs --check');
+  assert.equal(preflight.env.GH_TOKEN, '${{ github.token }}');
+  assert.equal(release.jobs.prepare.outputs.already_published, '${{ steps.preflight.outputs.already_published }}');
   assert.deepEqual(release.jobs.artifacts.needs, ['prepare', 'images']);
   assert.ok(release.jobs.images.steps.some((s) => s.with?.name === 'candidate-${{ matrix.arch }}'));
   const publication = release.jobs.artifacts.steps.at(-1).run;
   assert.match(publication, /helm push/);
-  assert.match(publication, /gh release create/);
+  assert.match(publication, /node tests\/publish-release\.mjs/);
   assert.doesNotMatch(publication, /docker (?:build\b|buildx build\b)|pr merge/);
-  assert.match(publication, /git\/tags/);
-  assert.match(publication, /refs\/tags\/v\$VERSION/);
-  assert.match(publication, /--verify-tag/);
   const steps = release.jobs.artifacts.steps;
   const signing = steps.findIndex((s) => s.name === 'Sign tested image indexes and attest architecture SBOMs');
   const aliasing = steps.findIndex((s) => s.name === 'Publish image aliases, OCI chart and GitHub release');
@@ -109,4 +114,90 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   assert.equal(release.jobs.artifacts.permissions['id-token'], 'write');
   assert.equal(release.jobs.artifacts.permissions.attestations, 'write');
   assert.equal(ci.jobs.release.permissions['id-token'], 'write');
+});
+
+const releaseContext = { tag: 'v1.2.3', revision: 'a'.repeat(40) };
+const releaseAssets = ['chart.tgz', 'sbom.json', 'provenance.json'];
+function fakeReleaseApi() {
+  const state = { ref: null, target: null, release: null, assets: [], calls: [], fail: null };
+  const api = {
+    readTag: () => state.ref,
+    readTagObject: () => ({ object: state.target }),
+    readRelease: () => state.release,
+    createTag(tag, revision) {
+      state.calls.push('tag');
+      state.ref = { type: 'tag', sha: 'b'.repeat(40) };
+      state.target = { type: 'commit', sha: revision };
+      if (state.fail === 'tag') throw new Error('Tag response lost');
+    },
+    createDraft() {
+      state.calls.push('draft');
+      state.release = { draft: true };
+      if (state.fail === 'draft') throw new Error('Draft response lost');
+    },
+    uploadAssets(tag, assets) {
+      assert.equal(state.release.draft, true);
+      state.calls.push('upload');
+      state.assets = state.fail === 'upload' ? assets.slice(0, 1) : [...assets];
+      if (state.fail === 'upload') throw new Error('Partial asset upload');
+    },
+    publishDraft() {
+      assert.deepEqual(state.assets, releaseAssets);
+      state.calls.push('publish');
+      state.release.draft = false;
+      if (state.fail === 'publish') throw new Error('Publish response lost');
+    },
+  };
+  return { state, api };
+}
+for (const failure of ['tag', 'draft', 'upload']) {
+  test(`release retries recover from a failed ${failure} without recreating its tag or publishing missing assets`, () => {
+    const { api, state } = fakeReleaseApi();
+    state.fail = failure;
+    assert.throws(() => publishRelease(api, releaseContext, releaseAssets));
+    assert.equal(checkRelease(api, releaseContext).published, false);
+    state.fail = null;
+    assert.equal(publishRelease(api, releaseContext, releaseAssets), 'published');
+    assert.equal(state.calls.filter((call) => call === 'tag').length, 1);
+    assert.equal(state.calls.filter((call) => call === 'draft').length, 1);
+    assert.deepEqual(state.assets, releaseAssets);
+    assert.equal(state.release.draft, false);
+  });
+}
+test('published matching release is left untouched, including after a lost publish response', () => {
+  const { api, state } = fakeReleaseApi();
+  state.fail = 'publish';
+  assert.throws(() => publishRelease(api, releaseContext, releaseAssets));
+  assert.equal(checkRelease(api, releaseContext).published, true);
+  const calls = [...state.calls];
+  assert.equal(publishRelease(api, releaseContext, releaseAssets), 'already-published');
+  assert.deepEqual(state.calls, calls);
+});
+test('a release version targeting other source, a lightweight tag or an orphaned release fails before mutation', () => {
+  const { api, state } = fakeReleaseApi();
+  api.createTag(releaseContext.tag, 'c'.repeat(40));
+  state.calls = [];
+  assert.throws(() => publishRelease(api, releaseContext, releaseAssets), /tested commit/);
+  state.ref.type = 'commit';
+  state.ref.sha = releaseContext.revision;
+  assert.throws(() => publishRelease(api, releaseContext, releaseAssets), /annotated/);
+  state.ref = null;
+  state.release = { draft: false };
+  assert.throws(() => publishRelease(api, releaseContext, releaseAssets), /no verified tag/);
+  assert.deepEqual(state.calls, []);
+});
+test('release lookup failures stop publication before any mutation', () => {
+  const { api, state } = fakeReleaseApi();
+  api.readRelease = () => { throw new Error('GitHub unavailable'); };
+  assert.throws(() => publishRelease(api, releaseContext, releaseAssets), /GitHub unavailable/);
+  assert.deepEqual(state.calls, []);
+});
+test('release CLI refuses PR and develop contexts before contacting GitHub', () => {
+  for (const [event, ref] of [['pull_request', 'refs/pull/1/merge'], ['push', 'refs/heads/develop']]) {
+    const result = spawnSync('node', ['tests/publish-release.mjs'], {
+      encoding: 'utf8', env: { ...process.env, GITHUB_EVENT_NAME: event, GITHUB_REF: ref },
+    });
+    assert.notEqual(result.status, 0);
+    assert.match(result.stderr, /Release operations require a main push/);
+  }
 });

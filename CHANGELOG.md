@@ -30,3 +30,5 @@
   headless Services expose the actual listener even with custom API ports or OIDC.
 - Single release-version source, generated Helm package metadata, keyless image
   signatures, image/chart provenance, signed architecture SBOMs and annotated release tags.
+- Retryable release publication reuses tags at the tested commit and incomplete
+  drafts, uploads all assets before publishing, and preserves published releases.
