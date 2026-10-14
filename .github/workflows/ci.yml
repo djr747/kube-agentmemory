@@ -38,14 +38,14 @@ jobs:
           npm install --prefix build/npm --package-lock-only --ignore-scripts --no-audit --no-fund
           git diff --exit-code -- package-lock.json build/npm/package-lock.json
       - run: make package
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: chart
           path: dist/*.tgz
           if-no-files-found: error
       # SonarQube Cloud's GitHub App runs Automatic Analysis separately.
       # Do not inject SONAR_TOKEN into PR runs or add a conflicting scanner Action.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: coverage
@@ -133,13 +133,13 @@ jobs:
         run: make integration
       - name: Save exactly the tested candidate
         run: docker save kube-agentmemory:ci kube-agentmemory-engine:ci -o candidate.tar
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: candidate-${{ matrix.arch }}
           path: candidate.tar
           retention-days: 1
           if-no-files-found: error
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: reports-${{ matrix.arch }}
