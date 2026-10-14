@@ -19,5 +19,7 @@
   checksum-verified npm and shell-free nonroot app/engine runtimes.
 - Shared locked npm tooling for CI and builds to preserve platform metadata
   during dependency-lock freshness checks.
+- API OIDC integration waits for replacement Service routing before checking
+  authentication, while preserving strict HTTP and NetworkPolicy assertions.
 - Single release-version source, generated Helm package metadata, keyless image
   signatures, image/chart provenance, signed architecture SBOMs and annotated release tags.
