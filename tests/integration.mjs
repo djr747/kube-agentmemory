@@ -13,6 +13,7 @@ assert.match(engineImage, /^[a-zA-Z0-9./_-]+:[a-zA-Z0-9._-]+$/, 'Use a tagged en
 const cluster = process.env.INTEGRATION_CLUSTER || `agentmemory-integration-${process.pid}`;
 assert.match(cluster, /^agentmemory-integration-[a-z0-9-]+$/, 'Use a disposable integration cluster');
 const context = `kind-${cluster}`;
+const apiServicePort = 8080; // Deliberately different from either container listener.
 const results = resolve(process.env.RESULTS || 'test-results');
 const temp = mkdtempSync(join(tmpdir(), 'agentmemory-integration-'));
 const reuse = process.env.REUSE_CLUSTER === 'true';
@@ -68,15 +69,24 @@ try {
   assert.equal(metadata.appVersion, version);
   const imageParts = image.split(':');
   const engineParts = engineImage.split(':');
-  function deploy(files) {
+  function deploy(files, apiListener = 3111) {
     run('helm', ['upgrade', '--install', 'memory', archive, '--kube-context', context, '-n', 'agentmemory',
       '--set', 'fullnameOverride=memory', '--set', `image.repository=${imageParts[0]}`,
       '--set', `image.tag=${imageParts[1]}`, '--set', 'image.pullPolicy=Never', '--set', 'persistence.size=1Gi',
+      '--set', `service.port=${apiServicePort}`,
       '--set', `engine.image.repository=${engineParts[0]}`, '--set', `engine.image.tag=${engineParts[1]}`,
       '--set', 'engine.image.pullPolicy=Never',
       ...files.flatMap((file) => ['-f', file]), '--wait', '--timeout', '600s']);
     kube(['rollout', 'status', 'statefulset/memory', '--timeout=600s']);
     kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
+    const services = JSON.parse(capture('kubectl', ['--context', context, '-n', 'agentmemory',
+      'get', 'services', 'memory', 'memory-headless', '-o', 'json'])).items;
+    const primary = services.find((s) => s.metadata.name === 'memory');
+    const headless = services.find((s) => s.metadata.name === 'memory-headless');
+    assert.equal(primary.spec.ports[0].port, apiServicePort);
+    assert.equal(primary.spec.ports[0].targetPort, apiListener);
+    assert.equal(headless.spec.ports[0].port, apiListener);
+    assert.equal(headless.spec.ports[0].targetPort, apiListener);
   }
   deploy(['examples/local.yaml']);
   smoke('write');
@@ -113,6 +123,7 @@ try {
         securityContext: { runAsNonRoot: true, runAsUser: 65532, runAsGroup: 65532, seccompProfile: { type: 'RuntimeDefault' } },
         containers: [{ name: 'issuer', image, imagePullPolicy: 'Never', command: ['node', '/fixture/server.mjs'],
           env: [{ name: 'ISSUER_URL', value: 'http://oidc-fixture.agentmemory.svc.cluster.local:8080' },
+            { name: 'API_SERVICE_PORT', value: String(apiServicePort) },
             { name: 'CLIENT_SECRET', valueFrom: { secretKeyRef: { name: 'oauth-integration', key: 'OAUTH2_PROXY_CLIENT_SECRET' } } },
             { name: 'AGENTMEMORY_SECRET', valueFrom: { secretKeyRef: { name: 'agentmemory-auth', key: 'AGENTMEMORY_SECRET' } } }],
           securityContext: { allowPrivilegeEscalation: false, readOnlyRootFilesystem: true, capabilities: { drop: ['ALL'] } },
@@ -153,7 +164,7 @@ try {
   oauthSmoke();
   const protectedApi = join(temp, 'protected-api.yaml');
   writeFileSync(protectedApi, stringify({ oauth2Proxy: { protectApi: true, skipJwtBearerTokens: true } }));
-  deploy(['examples/local.yaml', oauthValues, oauthFiles, protectedApi]);
+  deploy(['examples/local.yaml', oauthValues, oauthFiles, protectedApi], 4180);
   oauthSmoke();
   // A separate client reaches the Service without requiring app-to-itself Service egress.
   kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node', '--input-type=module'], {

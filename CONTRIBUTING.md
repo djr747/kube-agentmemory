@@ -54,7 +54,9 @@ and applies the same JavaScript policy gate as CI. Reports are not committed.
 `make integration` creates a disposable Kind cluster, deploys the **packaged**
 chart, checks authentication, real local vector generation, memory search,
 replacement-Pod persistence, file credentials, retained PVCs and reinstall
-persistence. It uses a temporary kubeconfig and removes only the cluster it
+persistence. It deliberately uses ClusterIP port 8080 and checks numeric endpoint
+targets and direct headless access in both bearer and OIDC modes. It uses a
+temporary kubeconfig and removes only the cluster it
 created. Tests never deploy to your current cluster. Supply a packaged chart with
 `CHART_ARCHIVE_DIR=dist`; CI tests the validation job's archive and publishes those
 same bytes. A previously created test

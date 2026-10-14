@@ -26,5 +26,7 @@
 - Hardened npm bootstrap destinations and private extraction directories,
   script-free CI installation, bounded worker downloads, simpler credential and
   readiness handling, and adjustable ephemeral-storage budgets for all containers.
+- Numeric Service targets support the engine sidecar on Kubernetes 1.30–1.32;
+  headless Services expose the actual listener even with custom API ports or OIDC.
 - Single release-version source, generated Helm package metadata, keyless image
   signatures, image/chart provenance, signed architecture SBOMs and annotated release tags.

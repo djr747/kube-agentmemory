@@ -150,6 +150,8 @@ the memory chart and is not built/published by this project. See
 overlay `examples/oauth2-api.yaml` on your provider settings. This also enables
 verified JWT bearer support. API and headless Services then send requests to the
 proxy, and the NetworkPolicy removes inbound port 3111 while allowing 4180.
+The primary ClusterIP retains `service.port` and targets numeric port 4180;
+the headless Service publishes port 4180 directly, regardless of `service.port`.
 Ingress and Gateway API both retain the `/agentmemory` path through those
 Services. The private loopback viewer supplies the backend memory secret after
 the proxy authenticates the caller.

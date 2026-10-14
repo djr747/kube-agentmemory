@@ -38,6 +38,7 @@ test('single writer, retained storage, restricted containers and private engine 
   }
   for (const service of manifests.filter((m) => m.kind === 'Service')) {
     assert.deepEqual(service.spec.ports.map((p) => p.port), [3111]);
+    assert.ok(service.spec.ports.every((p) => p.targetPort === 3111));
   }
   const config = manifests.find((m) => m.kind === 'ConfigMap').data['config.yaml'];
   assert.match(config, /iii-worker-manager\n\s+config:\n\s+host: 127.0.0.1/);
@@ -50,11 +51,26 @@ test('API OIDC is opt-in, removes direct ingress and changes both Service target
   for (const route of ['traefik-ingress', 'traefik-gateway']) {
     const docs = render([...auth, '-f', `examples/${route}.yaml`, '-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']);
     for (const service of docs.filter((m) => m.kind === 'Service')) {
-      assert.ok(service.spec.ports.every((port) => port.targetPort === 'oauth'));
+      assert.ok(service.spec.ports.every((port) => port.targetPort === 4180));
     }
     assert.deepEqual(docs.find((m) => m.kind === 'NetworkPolicy').spec.ingress[0].ports, [{ protocol: 'TCP', port: 4180 }]);
     const proxy = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec.containers.find((c) => c.name === 'oauth2-proxy');
     assert.ok(proxy.args.includes('--skip-jwt-bearer-tokens=true'));
+  }
+});
+test('custom ClusterIP ports retain numeric targets and headless ports match the listener', () => {
+  const modes = [
+    { args: [], listener: 3111 },
+    { args: ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml'], listener: 4180 },
+  ];
+  for (const { args, listener } of modes) {
+    const services = render([...auth, '--set', 'service.port=8080', ...args]).filter((m) => m.kind === 'Service');
+    const primary = services.find((s) => !s.metadata.name.endsWith('-auth') && s.spec.clusterIP !== 'None');
+    const headless = services.find((s) => s.spec.clusterIP === 'None');
+    assert.equal(primary.spec.ports[0].port, 8080);
+    assert.equal(primary.spec.ports[0].targetPort, listener);
+    assert.equal(headless.spec.ports[0].port, listener);
+    assert.equal(headless.spec.ports[0].targetPort, listener);
   }
 });
 test('Entra, Keycloak, CSI identity/file mounts and resource overrides render', () => {

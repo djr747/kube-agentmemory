@@ -13,7 +13,8 @@ spec:
   ports:
     - name: http
       port: {{ .Values.service.port }}
-      targetPort: {{ if .Values.oauth2Proxy.protectApi }}oauth{{ else }}http{{ end }}
+      # Numeric targets also resolve restartable init-container ports on Kubernetes 1.30-1.32.
+      targetPort: {{ if .Values.oauth2Proxy.protectApi }}4180{{ else }}3111{{ end }}
   selector:
     {{- include "agentmemory.selector" . | nindent 4 }}
 {{- if .Values.oauth2Proxy.enabled }}
@@ -26,7 +27,7 @@ metadata:
     {{- include "agentmemory.labels" . | nindent 4 }}
 spec:
   type: ClusterIP
-  ports: [{name: oauth, port: 4180, targetPort: oauth}]
+  ports: [{name: oauth, port: 4180, targetPort: 4180}]
   selector:
     {{- include "agentmemory.selector" . | nindent 4 }}
 {{- end }}
@@ -41,7 +42,8 @@ spec:
   clusterIP: None
   ports:
     - name: http
-      port: {{ .Values.service.port }}
-      targetPort: {{ if .Values.oauth2Proxy.protectApi }}oauth{{ else }}http{{ end }}
+      # Headless DNS returns Pod IPs; it cannot translate the public Service port.
+      port: {{ if .Values.oauth2Proxy.protectApi }}4180{{ else }}3111{{ end }}
+      targetPort: {{ if .Values.oauth2Proxy.protectApi }}4180{{ else }}3111{{ end }}
   selector:
     {{- include "agentmemory.selector" . | nindent 4 }}

@@ -40,9 +40,12 @@ The container supplies these fixed Kubernetes runtime settings:
 | `III_TELEMETRY_ENABLED` | `false` |
 
 Do not override these ports/paths individually: the iii ConfigMap, probes,
-Service and volume mounts must agree. REST uses service port 3111; optional SSO
-also exposes proxy port 4180. With API OIDC enabled, that REST Service targets
-the proxy rather than the engine. Worker
+Service and volume mounts must agree. REST uses internal port 3111; optional SSO
+also exposes proxy port 4180. `service.port` can change the primary ClusterIP's
+public port (default 3111); its numeric target remains 3111, or 4180 with API OIDC.
+Numeric targets support the engine's restartable init container on Kubernetes
+1.30–1.32. The headless Service advertises the actual listener port, 3111 or 4180,
+because its DNS records return Pod IPs without port translation. Worker
 and stream listeners bind loopback; the separate viewer and engine metrics
 ports are not published. Use the optional [UI SSO route](oauth2-proxy.md), or
 port-forward Pod port 3113 to localhost for trusted local inspection.
