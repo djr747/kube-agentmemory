@@ -147,6 +147,15 @@ Automatic Analysis**. The App reports analysis and its quality gate as a separat
 GitHub check; configure that check as required for PRs into `main` to enforce it.
 Repository files cannot enable the App or configure branch protection.
 
+The project is [djr747_kube-agentmemory](https://sonarcloud.io/project/overview?id=djr747_kube-agentmemory)
+in organization `djr747`. These identifiers belong to the project's repository
+binding; `.sonarcloud.properties` does not need `sonar.projectKey` or
+`sonar.organization`. Keep `SONAR_TOKEN` out of PR runs. Having a repository
+token configured does not enable Automatic Analysis. The free plan supports
+PRs targeting `main`, including `develop` into `main`; it does not support
+standalone `develop` branch scans. A token-based scanner on `main` cannot be
+combined with Automatic Analysis for PRs in the same project.
+
 [.sonarcloud.properties](.sonarcloud.properties) defines source/test directories
 and is read from the default branch, so these settings take effect after this
 change reaches `main`. Automatic Analysis covers the default branch and PRs;

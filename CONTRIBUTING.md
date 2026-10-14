@@ -35,8 +35,11 @@ SonarQube Cloud analysis is performed separately by its GitHub App using
 Import the repository and enable that analysis method in SonarQube Cloud; no
 repository credentials are required. Do not add a scanner Action alongside it,
 because Sonar rejects duplicate CI and automatic analysis. Source/test settings
+for project `djr747_kube-agentmemory` (organization `djr747`)
 are in `.sonarcloud.properties` on the default branch. The App analyzes `main`
 and PRs, but not standalone `develop` pushes, and does not import coverage.
+Do not pass `SONAR_TOKEN` to PR runs. Enable Automatic Analysis in the Sonar
+project; adding project keys or a repository secret cannot activate it.
 Keep the App's quality-gate check required for PRs into `main`; our Actions
 workflow does not wait for or prove that external check. See the README setup.
 
