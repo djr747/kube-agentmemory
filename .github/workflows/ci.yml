@@ -28,7 +28,7 @@ jobs:
           node build/bootstrap-npm.mjs --ci
           ln -sf npm-cli.js .build-tools/npm/bin/npm
           echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0
       - run: make install release-check test chart audit
@@ -74,7 +74,7 @@ jobs:
           node build/bootstrap-npm.mjs --ci
           ln -sf npm-cli.js .build-tools/npm/bin/npm
           echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0
       - name: Build locked candidate
