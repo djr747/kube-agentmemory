@@ -1,0 +1,28 @@
+oauth2Proxy:
+  enabled: true
+  provider: keycloak-oidc
+  issuerUrl: https://identity.example.com/realms/agentmemory
+  clientId: agentmemory
+  scope: "openid profile email"
+  uiHost: memory-ui.example.com
+  redirectUrl: https://memory-ui.example.com/oauth2/callback
+  tlsSecretName: memory-ui-tls
+  emailDomains: [example.com]
+  existingSecret: agentmemory-oauth
+env:
+  VIEWER_ALLOWED_ORIGINS: https://memory-ui.example.com
+networkPolicy:
+  egress:
+    # The proxy reaches the issuer through Traefik's TLS endpoint. Adjust ports/selectors for your controller.
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: traefik}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: traefik}
+      ports: [{protocol: TCP, port: 443}, {protocol: TCP, port: 8443}]
+    # Retain model-download access; Helm replaces egress arrays rather than appending.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8]
+      ports: [{protocol: TCP, port: 443}]

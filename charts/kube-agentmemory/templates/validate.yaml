@@ -1,0 +1,42 @@
+{{- if and (not .Values.secrets.existingSecret) (not .Values.vault.enabled) (not (hasKey .Values.secretFiles "AGENTMEMORY_SECRET")) -}}
+{{- fail "Configure secrets.existingSecret, vault.enabled, or secretFiles.AGENTMEMORY_SECRET" -}}
+{{- end -}}
+{{- if .Values.vault.enabled -}}
+{{- $_ := required "vault.role is required" .Values.vault.role -}}
+{{- $_ := required "vault.secretPath is required" .Values.vault.secretPath -}}
+{{- if not (has "AGENTMEMORY_SECRET" .Values.vault.fields) -}}{{- fail "vault.fields must include AGENTMEMORY_SECRET" -}}{{- end -}}
+{{- if and .Values.networkPolicy.enabled (not .Values.networkPolicy.vaultEgress) -}}{{- fail "networkPolicy.vaultEgress is required for Vault" -}}{{- end -}}
+{{- if or .Values.secrets.existingSecret (hasKey .Values.secretFiles "AGENTMEMORY_SECRET") -}}{{- fail "Vault must be the sole AGENTMEMORY_SECRET source" -}}{{- end -}}
+{{- end -}}
+{{- if and .Values.ingress.enabled .Values.gateway.enabled -}}{{- fail "Choose either ingress or gateway per release" -}}{{- end -}}
+{{- if and .Values.ingress.enabled (not .Values.ingress.tlsSecretName) -}}{{- fail "ingress.tlsSecretName is required" -}}{{- end -}}
+{{- if and .Values.gateway.enabled (not .Values.gateway.parentRefs) -}}{{- fail "gateway.parentRefs is required" -}}{{- end -}}
+{{- if and (not .Values.serviceAccount.create) (not .Values.serviceAccount.name) -}}{{- fail "serviceAccount.name is required when create is false" -}}{{- end -}}
+{{- if and .Values.secrets.existingSecret (hasKey .Values.secretFiles "AGENTMEMORY_SECRET") -}}{{- fail "Choose one AGENTMEMORY_SECRET source" -}}{{- end -}}
+{{- $saveMs := index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" | int -}}
+{{- if le (mul .Values.engine.shutdownDelaySeconds 1000) $saveMs -}}{{- fail "engine.shutdownDelaySeconds must exceed the state-save interval" -}}{{- end -}}
+{{- if ge .Values.engine.shutdownDelaySeconds .Values.terminationGracePeriodSeconds -}}{{- fail "terminationGracePeriodSeconds must exceed engine shutdown delay" -}}{{- end -}}
+{{- range $key, $_ := .Values.podLabels -}}
+{{- if or (eq $key "app.kubernetes.io/name") (eq $key "app.kubernetes.io/instance") -}}{{- fail "podLabels cannot override StatefulSet selector labels" -}}{{- end -}}
+{{- end -}}
+{{- if and .Values.oauth2Proxy.protectApi (not .Values.oauth2Proxy.enabled) -}}{{- fail "oauth2Proxy.protectApi requires oauth2Proxy.enabled" -}}{{- end -}}
+{{- if .Values.oauth2Proxy.enabled -}}
+{{- $_ := required "oauth2Proxy.issuerUrl is required" .Values.oauth2Proxy.issuerUrl -}}
+{{- $_ := required "oauth2Proxy.clientId is required" .Values.oauth2Proxy.clientId -}}
+{{- $_ := required "oauth2Proxy.redirectUrl is required" .Values.oauth2Proxy.redirectUrl -}}
+{{- $_ := required "oauth2Proxy.uiHost is required" .Values.oauth2Proxy.uiHost -}}
+{{- if ne .Values.oauth2Proxy.redirectUrl (printf "https://%s/oauth2/callback" .Values.oauth2Proxy.uiHost) -}}{{- fail "OAuth redirectUrl must match the UI hostname" -}}{{- end -}}
+{{- if and .Values.ingress.enabled (eq .Values.ingress.host .Values.oauth2Proxy.uiHost) -}}{{- fail "OAuth UI and bearer API must use separate hostnames" -}}{{- end -}}
+{{- if and .Values.gateway.enabled (has .Values.oauth2Proxy.uiHost .Values.gateway.hostnames) -}}{{- fail "OAuth UI and bearer API must use separate hostnames" -}}{{- end -}}
+{{- if and .Values.ingress.enabled (not .Values.oauth2Proxy.tlsSecretName) -}}{{- fail "oauth2Proxy.tlsSecretName is required for UI ingress" -}}{{- end -}}
+{{- if not .Values.oauth2Proxy.emailDomains -}}{{- fail "oauth2Proxy.emailDomains must restrict allowed identities" -}}{{- end -}}
+{{- if and (not .Values.vault.enabled) (not .Values.oauth2Proxy.existingSecret) (or (not .Values.oauth2Proxy.secretFiles.clientSecret) (not .Values.oauth2Proxy.secretFiles.cookieSecret)) -}}
+{{- fail "Provide OAuth credentials through existingSecret, both secretFiles, or Vault" -}}
+{{- end -}}
+{{- if and .Values.vault.enabled (or .Values.oauth2Proxy.existingSecret .Values.oauth2Proxy.secretFiles.clientSecret .Values.oauth2Proxy.secretFiles.cookieSecret) -}}{{- fail "Vault must be the sole OAuth credential source when enabled" -}}{{- end -}}
+{{- if and .Values.oauth2Proxy.existingSecret (or .Values.oauth2Proxy.secretFiles.clientSecret .Values.oauth2Proxy.secretFiles.cookieSecret) -}}{{- fail "Choose one OAuth credential source" -}}{{- end -}}
+{{- end -}}
+{{- if eq .Chart.AppVersion "0.0.0" -}}
+{{- if and (not .Values.image.tag) (not .Values.image.digest) -}}{{- fail "Development chart requires image.tag or image.digest; use a packaged chart for release defaults" -}}{{- end -}}
+{{- if and (not .Values.engine.image.tag) (not .Values.engine.image.digest) -}}{{- fail "Development chart requires engine.image.tag or engine.image.digest" -}}{{- end -}}
+{{- end -}}

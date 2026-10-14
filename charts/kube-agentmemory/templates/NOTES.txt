@@ -1,0 +1,12 @@
+agentmemory uses one writer and retains its PVC on uninstall.
+API: http://{{ include "agentmemory.fullname" . }}:{{ .Values.service.port }}/agentmemory
+{{- if .Values.oauth2Proxy.protectApi }}
+API OIDC is enabled. Send a verified issuer/audience JWT; memory bearer secrets are denied.
+An enforcing NetworkPolicy must block direct Pod-IP port 3111 access.
+{{- else }}
+Send Authorization: Bearer <AGENTMEMORY_SECRET> on protected requests.
+{{- end }}
+Local embeddings download a model on first use; allow HTTPS egress until warmed.
+For port forwarding:
+  kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "agentmemory.fullname" . }} 3111:{{ .Values.service.port }}
+Restart the StatefulSet after credential rotation; credentials are read at startup.

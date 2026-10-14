@@ -1,0 +1,74 @@
+# Development-only identity provider on your local cluster. Existing namespace/TLS/bootstrap Secret required.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  namespace: identity
+spec:
+  replicas: 1
+  selector:
+    matchLabels: {app: keycloak}
+  template:
+    metadata:
+      labels: {app: keycloak}
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile: {type: RuntimeDefault}
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.8.0
+          args: [start-dev, --hostname=https://identity.example.com, --proxy-headers=xforwarded]
+          env:
+            - {name: KC_BOOTSTRAP_ADMIN_USERNAME, value: admin}
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: keycloak-bootstrap, key: password}
+          ports: [{name: http, containerPort: 8080}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities: {drop: [ALL]}
+          resources:
+            requests: {cpu: 250m, memory: 512Mi}
+            limits: {cpu: "2", memory: 1Gi}
+          readinessProbe:
+            httpGet: {path: /realms/master, port: http}
+            initialDelaySeconds: 30
+          volumeMounts:
+            - {name: data, mountPath: /opt/keycloak/data}
+      volumes:
+        - {name: data, emptyDir: {}}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: keycloak
+  namespace: identity
+spec:
+  selector: {app: keycloak}
+  ports: [{name: http, port: 8080, targetPort: http}]
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: keycloak
+  namespace: identity
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+spec:
+  ingressClassName: traefik
+  tls:
+    - hosts: [identity.example.com]
+      secretName: identity-tls
+  rules:
+    - host: identity.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service: {name: keycloak, port: {number: 8080}}

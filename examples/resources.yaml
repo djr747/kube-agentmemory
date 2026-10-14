@@ -1,0 +1,12 @@
+# Starting point for a busier instance; measure your workload before adopting.
+resources:
+  requests: {cpu: "1", memory: 1Gi}
+  limits: {cpu: "4", memory: 4Gi}
+engine:
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: "2", memory: 2Gi}
+oauth2Proxy:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: "1", memory: 512Mi}

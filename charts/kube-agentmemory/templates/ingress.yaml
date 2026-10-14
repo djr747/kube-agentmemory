@@ -1,0 +1,56 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "agentmemory.fullname" . }}
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts: [{{ .Values.ingress.host | quote }}]
+      secretName: {{ .Values.ingress.tlsSecretName }}
+  rules:
+    - host: {{ .Values.ingress.host | quote }}
+      http:
+        paths:
+          - path: /agentmemory
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "agentmemory.fullname" . }}
+                port:
+                  number: {{ .Values.service.port }}
+{{- if .Values.oauth2Proxy.enabled }}
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-ui
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  tls:
+    - hosts: [{{ .Values.oauth2Proxy.uiHost | quote }}]
+      secretName: {{ .Values.oauth2Proxy.tlsSecretName }}
+  rules:
+    - host: {{ .Values.oauth2Proxy.uiHost | quote }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "agentmemory.fullname" . }}-auth
+                port: {number: 4180}
+{{- end }}
+{{- end }}

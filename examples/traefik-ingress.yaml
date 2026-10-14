@@ -1,0 +1,16 @@
+ingress:
+  enabled: true
+  className: traefik
+  host: memory.example.com
+  tlsSecretName: memory-tls
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+env:
+  VIEWER_ALLOWED_ORIGINS: https://memory.example.com
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: traefik}
+      podSelector:
+        matchLabels: {app.kubernetes.io/name: traefik}

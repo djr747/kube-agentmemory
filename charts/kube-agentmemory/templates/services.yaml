@@ -1,0 +1,47 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentmemory.fullname" . }}
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+  {{- with .Values.service.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ if .Values.oauth2Proxy.protectApi }}oauth{{ else }}http{{ end }}
+  selector:
+    {{- include "agentmemory.selector" . | nindent 4 }}
+{{- if .Values.oauth2Proxy.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-auth
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports: [{name: oauth, port: 4180, targetPort: oauth}]
+  selector:
+    {{- include "agentmemory.selector" . | nindent 4 }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-headless
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+spec:
+  clusterIP: None
+  ports:
+    - name: http
+      port: {{ .Values.service.port }}
+      targetPort: {{ if .Values.oauth2Proxy.protectApi }}oauth{{ else }}http{{ end }}
+  selector:
+    {{- include "agentmemory.selector" . | nindent 4 }}

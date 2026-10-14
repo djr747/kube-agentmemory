@@ -1,0 +1,14 @@
+oauth2Proxy:
+  enabled: true
+  provider: oidc # Single-tenant generic OIDC; no Graph permissions or group-overage lookup
+  issuerUrl: https://login.microsoftonline.com/TENANT_ID/v2.0
+  clientId: APPLICATION_CLIENT_ID
+  scope: "openid profile email"
+  emailClaim: email
+  uiHost: memory-ui.example.com
+  redirectUrl: https://memory-ui.example.com/oauth2/callback
+  tlsSecretName: memory-ui-tls
+  emailDomains: [example.com]
+  existingSecret: agentmemory-oauth
+env:
+  VIEWER_ALLOWED_ORIGINS: https://memory-ui.example.com

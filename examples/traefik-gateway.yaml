@@ -1,0 +1,15 @@
+gateway:
+  enabled: true
+  hostnames: [memory.example.com]
+  parentRefs:
+    - name: traefik
+      namespace: traefik
+      sectionName: websecure
+env:
+  VIEWER_ALLOWED_ORIGINS: https://memory.example.com
+networkPolicy:
+  ingressFrom:
+    - namespaceSelector:
+        matchLabels: {kubernetes.io/metadata.name: traefik}
+      podSelector:
+        matchLabels: {app.kubernetes.io/name: traefik}

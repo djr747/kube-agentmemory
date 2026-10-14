@@ -1,0 +1,295 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "agentmemory.fullname" . }}
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "agentmemory.fullname" . }}-headless
+  replicas: 1
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  selector:
+    matchLabels:
+      {{- include "agentmemory.selector" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "agentmemory.selector" . | nindent 8 }}
+        {{- with .Values.podLabels }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      annotations:
+        checksum/engine: {{ include (print $.Template.BasePath "/engine-config.yaml") . | sha256sum }}
+        checksum/config: {{ toJson .Values.env | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- if .Values.vault.enabled }}
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: {{ .Values.vault.role | quote }}
+        vault.hashicorp.com/agent-inject-containers: {{ if .Values.oauth2Proxy.enabled }}app,oauth2-proxy{{ else }}app{{ end }}
+        vault.hashicorp.com/agent-run-as-user: "65532"
+        vault.hashicorp.com/agent-run-as-group: "65532"
+        vault.hashicorp.com/agent-service-account-token-volume-name: vault-token
+        {{- range .Values.vault.fields }}
+        vault.hashicorp.com/agent-inject-secret-{{ . }}: {{ $.Values.vault.secretPath | quote }}
+        vault.hashicorp.com/agent-inject-perms-{{ . }}: "0400"
+        vault.hashicorp.com/error-on-missing-key-{{ . }}: "true"
+        vault.hashicorp.com/agent-inject-template-{{ . }}: |
+          {{ printf "{{- with secret %q -}}{{ index .Data.data %q }}{{- end -}}" $.Values.vault.secretPath . }}
+        {{- end }}
+        {{- if .Values.oauth2Proxy.enabled }}
+        vault.hashicorp.com/agent-inject-secret-oauth2-client: {{ .Values.vault.secretPath | quote }}
+        vault.hashicorp.com/agent-inject-secret-oauth2-cookie: {{ .Values.vault.secretPath | quote }}
+        vault.hashicorp.com/agent-inject-perms-oauth2-client: "0400"
+        vault.hashicorp.com/agent-inject-perms-oauth2-cookie: "0400"
+        vault.hashicorp.com/error-on-missing-key-oauth2-client: "true"
+        vault.hashicorp.com/error-on-missing-key-oauth2-cookie: "true"
+        vault.hashicorp.com/agent-inject-template-oauth2-client: |
+          {{ printf "{{- with secret %q -}}{{ index .Data.data %q }}{{- end -}}" .Values.vault.secretPath "OAUTH2_PROXY_CLIENT_SECRET" }}
+        vault.hashicorp.com/agent-inject-template-oauth2-cookie: |
+          {{ printf "{{- with secret %q -}}{{ base64Decode (index .Data.data %q) }}{{- end -}}" .Values.vault.secretPath "OAUTH2_PROXY_COOKIE_SECRET" }}
+        {{- end }}
+        {{- with .Values.vault.annotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "agentmemory.serviceAccount" . }}
+      automountServiceAccountToken: false
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65532
+        runAsGroup: 65532
+        fsGroup: 65532
+        fsGroupChangePolicy: OnRootMismatch
+        seccompProfile: {type: RuntimeDefault}
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      # Native sidecar stops after the application, allowing its shutdown flush
+      # to reach the engine before the engine closes the persistent state store.
+      initContainers:
+        - name: engine
+          restartPolicy: Always
+          image: {{ include "agentmemory.image" (dict "repository" .Values.engine.image.repository "tag" (.Values.engine.image.tag | default .Chart.AppVersion) "digest" .Values.engine.image.digest) | quote }}
+          imagePullPolicy: {{ .Values.engine.image.pullPolicy }}
+          args: ["--config", "/app/config.yaml", "--no-update-check"]
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: {{ .Values.engine.shutdownDelaySeconds }}
+          env:
+            - {name: III_TELEMETRY_ENABLED, value: "false"}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          ports:
+            - {name: http, containerPort: 3111}
+          startupProbe:
+            tcpSocket: {port: 3111}
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: {path: /agentmemory/livez, port: http}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /agentmemory/livez, port: http}
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.engine.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: engine-config, mountPath: /app/config.yaml, subPath: config.yaml, readOnly: true}
+            - {name: engine-work, mountPath: /app/config}
+            - {name: engine-tmp, mountPath: /tmp}
+      containers:
+        - name: app
+          image: {{ include "agentmemory.image" (dict "repository" .Values.image.repository "tag" (.Values.image.tag | default .Chart.AppVersion) "digest" .Values.image.digest) | quote }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          env:
+            {{- range $key, $value := .Values.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.secrets.existingSecret }}
+            - name: AGENTMEMORY_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secrets.existingSecret }}
+                  key: {{ .Values.secrets.key }}
+            {{- end }}
+            {{- range $key, $value := .Values.secretFiles }}
+            - name: {{ printf "%s_FILE" $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- if .Values.vault.enabled }}
+            {{- range .Values.vault.fields }}
+            - name: {{ printf "%s_FILE" . }}
+              value: {{ printf "/vault/secrets/%s" . | quote }}
+            {{- end }}
+            {{- end }}
+            {{- with .Values.extraEnv }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+          {{- with .Values.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          startupProbe:
+            httpGet: {path: /agentmemory/livez, port: 3111}
+            periodSeconds: 5
+            failureThreshold: 120
+          readinessProbe:
+            httpGet: {path: /agentmemory/livez, port: 3111}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /agentmemory/livez, port: 3111}
+            periodSeconds: 20
+            failureThreshold: 6
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          volumeMounts:
+            - {name: data, mountPath: /data}
+            - {name: app-tmp, mountPath: /tmp}
+            {{- with .Values.extraVolumeMounts }}
+            {{- toYaml . | nindent 12 }}
+            {{- end }}
+        {{- if .Values.oauth2Proxy.enabled }}
+        - name: oauth2-proxy
+          image: {{ include "agentmemory.image" (dict "repository" .Values.oauth2Proxy.image.repository "tag" (.Values.oauth2Proxy.image.tag | default .Chart.AppVersion) "digest" .Values.oauth2Proxy.image.digest) | quote }}
+          imagePullPolicy: {{ .Values.oauth2Proxy.image.pullPolicy }}
+          args:
+            - {{ printf "--provider=%s" .Values.oauth2Proxy.provider | quote }}
+            - {{ printf "--scope=%s" .Values.oauth2Proxy.scope | quote }}
+            - {{ printf "--oidc-email-claim=%s" .Values.oauth2Proxy.emailClaim | quote }}
+            - --http-address=0.0.0.0:4180
+            - --upstream=http://127.0.0.1:3113
+            - --pass-host-header=false
+            - --reverse-proxy=true
+            - --cookie-name=__Host-agentmemory
+            - --cookie-secure=true
+            - --cookie-httponly=true
+            - --cookie-samesite=lax
+            - --cookie-csrf-per-request=true
+            - --code-challenge-method=S256
+            - --insecure-oidc-skip-nonce=false
+            - --skip-provider-button=true
+            - --pass-access-token=false
+            - --pass-authorization-header=false
+            - --request-logging=false
+            - --api-route=^/agentmemory(/|$)
+            - {{ printf "--oidc-issuer-url=%s" .Values.oauth2Proxy.issuerUrl | quote }}
+            - {{ printf "--client-id=%s" .Values.oauth2Proxy.clientId | quote }}
+            - {{ printf "--redirect-url=%s" .Values.oauth2Proxy.redirectUrl | quote }}
+            {{- range .Values.oauth2Proxy.emailDomains }}
+            - {{ printf "--email-domain=%s" . | quote }}
+            {{- end }}
+            {{- range .Values.oauth2Proxy.allowedGroups }}
+            - {{ printf "--allowed-group=%s" . | quote }}
+            {{- end }}
+            - {{ printf "--skip-jwt-bearer-tokens=%t" .Values.oauth2Proxy.skipJwtBearerTokens | quote }}
+            - --bearer-token-login-fallback=false
+            {{- range .Values.oauth2Proxy.extraJwtIssuers }}
+            - {{ printf "--extra-jwt-issuers=%s" . | quote }}
+            {{- end }}
+            {{- if .Values.vault.enabled }}
+            - --client-secret-file=/vault/secrets/oauth2-client
+            - --cookie-secret-file=/vault/secrets/oauth2-cookie
+            {{- else if not .Values.oauth2Proxy.existingSecret }}
+            - {{ printf "--client-secret-file=%s" .Values.oauth2Proxy.secretFiles.clientSecret | quote }}
+            - {{ printf "--cookie-secret-file=%s" .Values.oauth2Proxy.secretFiles.cookieSecret | quote }}
+            {{- end }}
+          {{- if .Values.oauth2Proxy.existingSecret }}
+          env:
+            - name: OAUTH2_PROXY_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.oauth2Proxy.existingSecret }}, key: OAUTH2_PROXY_CLIENT_SECRET}
+            - name: OAUTH2_PROXY_COOKIE_SECRET
+              valueFrom:
+                secretKeyRef: {name: {{ .Values.oauth2Proxy.existingSecret }}, key: OAUTH2_PROXY_COOKIE_SECRET}
+          {{- end }}
+          ports: [{name: oauth, containerPort: 4180}]
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: {drop: [ALL]}
+          startupProbe:
+            httpGet: {path: /ping, port: oauth}
+            periodSeconds: 5
+            failureThreshold: 60
+          readinessProbe:
+            httpGet: {path: /ready, port: oauth}
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: {path: /ping, port: oauth}
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.oauth2Proxy.resources | nindent 12 }}
+          {{- with .Values.oauth2Proxy.extraVolumeMounts }}
+          volumeMounts:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+        {{- end }}
+      volumes:
+        - name: engine-config
+          configMap:
+            name: {{ include "agentmemory.fullname" . }}-engine
+        - {name: engine-work, emptyDir: {sizeLimit: 64Mi}}
+        - {name: engine-tmp, emptyDir: {sizeLimit: 64Mi}}
+        - {name: app-tmp, emptyDir: {sizeLimit: 256Mi}}
+        {{- if .Values.persistence.existingClaim }}
+        - name: data
+          persistentVolumeClaim:
+            claimName: {{ .Values.persistence.existingClaim }}
+        {{- end }}
+        {{- if .Values.vault.enabled }}
+        - name: vault-token
+          projected:
+            sources:
+              - serviceAccountToken:
+                  path: token
+                  audience: {{ .Values.vault.audience | quote }}
+                  expirationSeconds: 3600
+        {{- end }}
+        {{- with .Values.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if not .Values.persistence.existingClaim }}
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes:
+          {{- toYaml .Values.persistence.accessModes | nindent 10 }}
+        {{- if eq .Values.persistence.storageClass "-" }}
+        storageClassName: ""
+        {{- else if .Values.persistence.storageClass }}
+        storageClassName: {{ .Values.persistence.storageClass | quote }}
+        {{- end }}
+        resources:
+          requests:
+            storage: {{ .Values.persistence.size }}
+  {{- end }}

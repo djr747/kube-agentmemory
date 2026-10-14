@@ -1,0 +1,29 @@
+{
+  "name": "kube-agentmemory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Secure Kubernetes packaging for agentmemory",
+  "scripts": {
+    "test": "mkdir -p coverage && node --test --experimental-test-coverage --test-reporter=spec --test-reporter-destination=stdout --test-reporter=lcov --test-reporter-destination=coverage/lcov.info tests/*.test.mjs",
+    "check": "node --check build/bootstrap-npm.mjs && node --check runtime/entrypoint.mjs && node --check runtime/secrets.mjs && node --check tests/smoke.mjs && node --check tests/integration.mjs",
+    "audit": "npm audit --audit-level=high && npm audit --prefix build/npm --audit-level=high"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "overrides": {
+    "@iii-dev/helpers": "0.24.5"
+  },
+  "devDependencies": {
+    "yaml": "2.9.1"
+  },
+  "dependencies": {
+    "@agentmemory/agentmemory": "0.9.30",
+    "dotenv": "18.0.3"
+  },
+  "allowScripts": {
+    "onnxruntime-node@1.30.0": true,
+    "protobufjs@7.6.6": true
+  }
+}

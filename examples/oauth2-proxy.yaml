@@ -1,0 +1,12 @@
+# Overlay with either Traefik routing example and your secret/provider values.
+oauth2Proxy:
+  enabled: true
+  issuerUrl: https://identity.example.com/realms/agents
+  clientId: agentmemory
+  uiHost: memory-ui.example.com
+  redirectUrl: https://memory-ui.example.com/oauth2/callback
+  tlsSecretName: memory-ui-tls
+  emailDomains: [example.com]
+  existingSecret: agentmemory-oauth
+env:
+  VIEWER_ALLOWED_ORIGINS: https://memory.example.com,https://memory-ui.example.com

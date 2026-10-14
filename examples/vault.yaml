@@ -1,0 +1,15 @@
+secrets:
+  existingSecret: ""
+vault:
+  enabled: true
+  role: agentmemory
+  secretPath: secret/data/agentmemory
+  fields: [AGENTMEMORY_SECRET]
+networkPolicy:
+  vaultEgress:
+    - to:
+        - namespaceSelector:
+            matchLabels: {kubernetes.io/metadata.name: vault}
+          podSelector:
+            matchLabels: {app.kubernetes.io/name: vault}
+      ports: [{protocol: TCP, port: 8200}]

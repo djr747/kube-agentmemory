@@ -1,0 +1,12 @@
+# Preserve the upstream-supported wire version while refreshing its OS libraries.
+FROM iiidev/iii:0.22.1 AS upstream
+FROM gcr.io/distroless/cc-debian13:nonroot
+COPY --from=upstream /app/iii /app/iii
+COPY --from=upstream --chown=65532:65532 /app/data /app/data
+COPY --from=upstream --chown=65532:65532 /app/config /app/config
+COPY --from=upstream --chown=65532:65532 /data /data
+WORKDIR /app
+ENV III_EXECUTION_CONTEXT=docker III_ENV=development III_TELEMETRY_ENABLED=false
+USER 65532:65532
+ENTRYPOINT ["/app/iii"]
+CMD ["--config", "/app/config.yaml", "--no-update-check"]
