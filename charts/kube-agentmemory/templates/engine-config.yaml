@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-engine
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+data:
+  config.yaml: |
+    workers:
+      - name: iii-http
+        config:
+          host: 0.0.0.0
+          port: 3111
+          default_timeout: 180000
+      - name: iii-worker-manager
+        config:
+          host: 127.0.0.1
+          port: 49134
+      - name: iii-state
+        config:
+          adapter:
+            name: kv
+            config:
+              store_method: file_based
+              save_interval_ms: {{ index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" }}
+              file_path: /data/state_store.db
+      - name: iii-queue
+        config:
+          adapter: {name: builtin}
+      - name: iii-pubsub
+        config:
+          adapter: {name: local}
+      - name: iii-cron
+        config:
+          adapter: {name: kv}
+      - name: iii-stream
+        config:
+          host: 127.0.0.1
+          port: 3112
+          adapter:
+            name: kv
+            config:
+              store_method: file_based
+              file_path: /data/stream_store
+      - name: iii-observability
+        config:
+          enabled: true
+          service_name: agentmemory
+          exporter: memory
+          sampling_ratio: 0.1
+          metrics_enabled: true
+          logs_enabled: true
+          logs_console_output: false

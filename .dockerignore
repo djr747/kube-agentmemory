@@ -1,0 +1,14 @@
+.git
+.github
+node_modules
+.build-tools
+dist
+coverage
+test-results
+.env*
+docs
+tests
+!tests/smoke.mjs
+charts
+examples
+*.tgz

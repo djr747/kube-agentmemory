@@ -1,0 +1,118 @@
+nameOverride: ""
+fullnameOverride: ""
+image:
+  repository: ghcr.io/djr747/kube-agentmemory
+  tag: "" # Chart appVersion when empty
+  digest: ""
+  pullPolicy: IfNotPresent
+imagePullSecrets: []
+engine:
+  shutdownDelaySeconds: 5 # Allow the last periodic state-store flush after app shutdown
+  image:
+    repository: ghcr.io/djr747/kube-agentmemory-engine
+    tag: "" # Chart appVersion; Dockerfile.engine preserves the paired iii-sdk pin
+    digest: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 50Mi}
+    limits: {cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi}
+persistence:
+  size: 10Gi
+  storageClass: "" # Omitted to use the cluster default; '-' means no class
+  existingClaim: ""
+  accessModes: [ReadWriteOnce]
+service:
+  port: 3111
+  annotations: {}
+serviceAccount:
+  create: true
+  name: ""
+  annotations: {}
+# Required unless secretFiles or vault provides AGENTMEMORY_SECRET. No secrets in values.
+secrets:
+  existingSecret: ""
+  key: AGENTMEMORY_SECRET
+secretFiles: {} # e.g. AGENTMEMORY_SECRET: /vault/secrets/AGENTMEMORY_SECRET
+vault:
+  enabled: false
+  role: ""
+  secretPath: "" # KV v2 data path, e.g. secret/data/agentmemory
+  audience: vault
+  # Generate one raw file per Vault field. These keys must exist in the secret.
+  fields: [AGENTMEMORY_SECRET]
+  annotations: {}
+env:
+  EMBEDDING_PROVIDER: local
+  AGENTMEMORY_AUTO_COMPRESS: "false"
+  CONSOLIDATION_ENABLED: "false"
+  GRAPH_EXTRACTION_ENABLED: "false"
+  AGENTMEMORY_REFLECT: "false"
+  AGENTMEMORY_ALLOW_AGENT_SDK: "false"
+  AGENTMEMORY_STATE_SAVE_INTERVAL_MS: "2000"
+  AGENTMEMORY_INDEX_SAVE_INTERVAL_MS: "2000"
+# Arbitrary upstream variables, Secret refs and file paths are supported here.
+extraEnv: []
+envFrom: []
+extraVolumes: []
+extraVolumeMounts: []
+podAnnotations: {}
+podLabels: {} # For example, azure.workload.identity/use: "true"
+resources:
+  requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 100Mi}
+  limits: {cpu: "2", memory: 2Gi, ephemeral-storage: 512Mi}
+terminationGracePeriodSeconds: 60
+nodeSelector: {}
+tolerations: []
+affinity: {}
+ingress:
+  enabled: false
+  className: traefik
+  annotations: {}
+  host: memory.example.com
+  tlsSecretName: ""
+gateway:
+  enabled: false
+  parentRefs: [] # Existing Gateway with HTTPS listener
+  hostnames: [memory.example.com]
+oauth2Proxy:
+  enabled: false
+  protectApi: false # Route API Services through OIDC; standard memory bearer clients then fail
+  provider: oidc # oidc, entra-id, or keycloak-oidc
+  scope: "openid profile email"
+  emailClaim: email
+  image:
+    repository: quay.io/oauth2-proxy/oauth2-proxy
+    tag: v7.15.5
+    digest: ""
+    pullPolicy: IfNotPresent
+  issuerUrl: ""
+  clientId: ""
+  redirectUrl: "" # https://memory.example.com/oauth2/callback
+  uiHost: "" # Separate browser hostname; API retains bearer auth unless protectApi is true
+  tlsSecretName: "" # UI certificate for Ingress; Gateway listener owns its certificate
+  emailDomains: [] # Explicit allowed domains; '*' deliberately permits all provider users
+  allowedGroups: []
+  skipJwtBearerTokens: false
+  extraJwtIssuers: [] # issuer=audience, used only with verified JWT bearer support
+  existingSecret: "" # keys OAUTH2_PROXY_CLIENT_SECRET and OAUTH2_PROXY_COOKIE_SECRET
+  secretFiles:
+    clientSecret: ""
+    cookieSecret: "" # raw binary AES key: exactly 16, 24 or 32 bytes
+  extraVolumeMounts: []
+  resources:
+    requests: {cpu: 50m, memory: 64Mi, ephemeral-storage: 10Mi}
+    limits: {cpu: 500m, memory: 256Mi, ephemeral-storage: 64Mi}
+networkPolicy:
+  enabled: true
+  # Default allows API clients only from the release namespace. Set selectors for Traefik.
+  ingressFrom:
+    - podSelector: {}
+  # Local embeddings download weights from Hugging Face on first use. Empty egress list
+  # disables this allowance after warming the persistent cache; DNS remains enabled.
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except: [10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.0.0/16, 127.0.0.0/8]
+      ports: [{protocol: TCP, port: 443}]
+  vaultEgress: [] # Required when Vault is enabled: namespace/pod selectors and TCP 8200

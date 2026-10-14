@@ -1,0 +1,11 @@
+# Default local embeddings run inside the app. No model runner or API key required.
+env:
+  EMBEDDING_PROVIDER: local
+  AGENTMEMORY_AUTO_COMPRESS: "false"
+  CONSOLIDATION_ENABLED: "false"
+  GRAPH_EXTRACTION_ENABLED: "false"
+  AGENTMEMORY_REFLECT: "false"
+secrets:
+  existingSecret: agentmemory-auth
+persistence:
+  size: 10Gi

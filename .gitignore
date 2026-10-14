@@ -1,0 +1,12 @@
+node_modules/
+.build-tools/
+dist/
+coverage/
+*.tgz
+.env
+.env.*
+!.env.example
+.kube/
+test-results/
+release-notes.md
+release-assets/

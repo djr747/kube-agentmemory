@@ -1,0 +1,4 @@
+# Overlay after examples/vault.yaml and examples/oauth2-proxy.yaml.
+# Store both OAuth fields alongside AGENTMEMORY_SECRET in the Vault KV record.
+oauth2Proxy:
+  existingSecret: ""

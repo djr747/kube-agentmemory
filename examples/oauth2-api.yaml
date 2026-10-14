@@ -1,0 +1,4 @@
+# Overlay on your OAuth provider settings. Changes the API authentication contract.
+oauth2Proxy:
+  protectApi: true
+  skipJwtBearerTokens: true

@@ -1,0 +1,11 @@
+apiVersion: v2
+name: kube-agentmemory
+description: Secure single-writer agentmemory with persistent local embeddings
+type: application
+kubeVersion: ">=1.30.0-0"
+# Development metadata only. Packaging derives both versions from package.json.
+version: 0.0.0
+appVersion: "0.0.0"
+home: https://github.com/djr747/kube-agentmemory
+sources:
+  - https://github.com/rohitg00/agentmemory

@@ -1,0 +1,23 @@
+# Install in the Traefik namespace; certificate Secret also belongs there.
+# Gateway API CRDs and Traefik's kubernetesGateway provider must already be enabled.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: traefik
+  namespace: traefik
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: websecure
+      protocol: HTTPS
+      port: 443
+      hostname: memory.example.com
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - name: memory-tls
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels: {kubernetes.io/metadata.name: agentmemory}

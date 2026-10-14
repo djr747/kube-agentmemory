@@ -1,0 +1,24 @@
+# Overlay instead of local.yaml/vault.yaml. SecretProviderClass must already exist.
+secrets:
+  existingSecret: ""
+vault:
+  enabled: false
+secretFiles:
+  AGENTMEMORY_SECRET: /mnt/secrets-store/AGENTMEMORY_SECRET
+serviceAccount:
+  name: agentmemory-keyvault
+  annotations:
+    azure.workload.identity/client-id: USER_ASSIGNED_CLIENT_ID
+podLabels:
+  azure.workload.identity/use: "true"
+extraVolumes:
+  - name: keyvault-secrets
+    csi:
+      driver: secrets-store.csi.k8s.io
+      readOnly: true
+      volumeAttributes:
+        secretProviderClass: agentmemory-azure
+extraVolumeMounts:
+  - name: keyvault-secrets
+    mountPath: /mnt/secrets-store
+    readOnly: true

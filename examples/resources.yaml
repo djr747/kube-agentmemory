@@ -1,0 +1,12 @@
+# Starting point for a busier instance; measure your workload before adopting.
+resources:
+  requests: {cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi}
+  limits: {cpu: "4", memory: 4Gi, ephemeral-storage: 1Gi}
+engine:
+  resources:
+    requests: {cpu: 250m, memory: 256Mi, ephemeral-storage: 128Mi}
+    limits: {cpu: "2", memory: 2Gi, ephemeral-storage: 512Mi}
+oauth2Proxy:
+  resources:
+    requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 32Mi}
+    limits: {cpu: "1", memory: 512Mi, ephemeral-storage: 128Mi}
