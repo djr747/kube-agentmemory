@@ -30,6 +30,16 @@ unfixed high/critical findings are listed in the CI summary. This policy matches
 the repository owner's chosen reference procedure. There are no advisory
 suppressions. Do not bypass security gates to publish.
 
+SonarQube Cloud analysis is performed separately by its GitHub App using
+[Automatic Analysis](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/automatic-analysis).
+Import the repository and enable that analysis method in SonarQube Cloud; no
+repository credentials are required. Do not add a scanner Action alongside it,
+because Sonar rejects duplicate CI and automatic analysis. Source/test settings
+are in `.sonarcloud.properties` on the default branch. The App analyzes `main`
+and PRs, but not standalone `develop` pushes, and does not import coverage.
+Keep the App's quality-gate check required for PRs into `main`; our Actions
+workflow does not wait for or prove that external check. See the README setup.
+
 For `make security`, install the official Grype 0.120.1 CLI or pass its path with
 `GRYPE=/path/to/grype`. It writes full application/engine reports to `test-results/`
 and applies the same JavaScript policy gate as CI. Reports are not committed.

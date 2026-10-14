@@ -5,8 +5,10 @@
 - Initial locked agentmemory container build with built-in local embeddings.
 - Secure single-writer StatefulSet Helm chart with retained storage, Vault file injection,
   environment/file credentials, Traefik Ingress and Gateway API examples.
-- Dependency audit, Anchore container scanning, optional SonarQube Cloud quality gate,
-  and disposable Kind integration tests before image/chart publication.
+- Dependency audit, Anchore container scanning and disposable Kind integration
+  tests before image/chart publication.
+- Token-free SonarQube Cloud Automatic Analysis through its GitHub App, with
+  source/test configuration and separate PR quality-gate setup.
 - Optional external OAuth2 Proxy sidecar for UI-only SSO on a separate hostname,
   preserving standard bearer-token agent integrations.
 - Native engine sidecar and shutdown flush delay to retain vector checkpoints

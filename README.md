@@ -139,16 +139,21 @@ The release framework generates chart versions from `package.json`, signs app
 and engine digests with Cosign, and publishes image/chart provenance plus signed
 architecture SBOM attestations before applying release aliases.
 
-For [SonarQube Cloud's free public-project analysis](https://www.sonarsource.com/open-source/),
-create a project, disable automatic analysis when using CI, and configure:
+SonarQube Cloud uses its GitHub App's
+[Automatic Analysis](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/automatic-analysis),
+with no repository token or scanner Action. Import this repository into SonarQube
+Cloud, grant the GitHub App access, and enable **Administration > Analysis Method >
+Automatic Analysis**. The App reports analysis and its quality gate as a separate
+GitHub check; configure that check as required for PRs into `main` to enforce it.
+Repository files cannot enable the App or configure branch protection.
 
-- Repository secret `SONAR_TOKEN`.
-- Repository variables `SONAR_PROJECT_KEY` and `SONAR_ORGANIZATION`.
-
-When configured, CI waits for Sonar's quality gate. Missing configuration is
-reported visibly; npm and Grype checks remain mandatory on all builds, including
-fork pull requests. Weekly CI rechecks current advisory data and Dependabot
-proposes dependency, base image and Action updates.
+[.sonarcloud.properties](.sonarcloud.properties) defines source/test directories
+and is read from the default branch, so these settings take effect after this
+change reaches `main`. Automatic Analysis covers the default branch and PRs;
+standalone `develop` pushes and LCOV coverage import are unsupported. CI retains
+the coverage artifact for review. npm and Grype checks remain mandatory on all
+builds, including fork pull requests. Weekly CI rechecks current advisory data
+and Dependabot proposes dependency, base image and Action updates.
 
 See [configuration](docs/configuration.md) for environment variables, external
 providers, file credentials, networking and cache controls, and
