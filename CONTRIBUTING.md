@@ -99,6 +99,17 @@ Verify official image tag availability and registry access before any change.
 To refresh base packages without a version change, rebuild the same documented
 base tag; CI does not cache container builds. Dependency and Action updates are
 proposed weekly by Dependabot; they still need review and the full CI suite.
+Version updates target `develop`; Action updates are grouped. Security updates
+continue to target the default branch under GitHub's separate security-update
+behavior and still need to be staged and reviewed before a main release.
+The npm tool uses `lockfile-only` updates to retain the vendor's supported ranges.
+Its top-level dependency versions are maintained with the npm source version,
+not as independently upgraded application packages. Bootstrap verifies those
+ranges against the integrity-checked source archive before replacing its bundle.
+Docker engine update proposals remain visible, but the SDK/engine equality gate
+blocks unsupported engine-only changes. Agentmemory 0.9.30 depends on iii 0.22.1;
+0.23+ removed its worker configuration lifecycle. See the linked upstream
+configuration in [runtime configuration](docs/configuration.md).
 
 For an npm build-tool update, verify its official registry version, Node engines,
 tarball URL and SHA-512 integrity. Update `build/npm/package.json`'s version,

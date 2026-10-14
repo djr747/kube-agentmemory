@@ -57,13 +57,13 @@ succeeds. Published GitHub Releases are left untouched, and a tag pointing to
 another commit blocks publication before registry changes. Fixes on a different
 commit require a new version. No tag deletion or forced tag update is needed.
 
-For both image repositories, the initial release aliases are:
+For both image repositories, the next release aliases are:
 
 | Tag | Purpose |
 | --- | --- |
-| `0.1.0` | Project release; the chart's default |
+| `0.1.1` | Project release; the chart's default |
 | `0.1` / `0` | Moving minor/major aliases |
-| `0.1.0-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
+| `0.1.1-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
 | `latest` | Most recently published successful main release |
 | `sha-COMMIT-amd64` / `sha-COMMIT-arm64` | Exact architecture candidates |
 
