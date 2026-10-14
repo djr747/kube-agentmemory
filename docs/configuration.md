@@ -6,13 +6,21 @@ application package and all transitive packages are locked in `package-lock.json
 Distroless C/C++ runtime to refresh its OS/OpenSSL libraries. Both app and engine
 images use this project's release version and are built, tested and published together.
 Google Distroless and iii images support amd64/arm64 and require no DHI credentials.
+The latest agentmemory release still pins `iii-sdk` 0.22.1. Its
+[versioned Compose configuration](https://github.com/rohitg00/agentmemory/blob/v0.9.30/docker-compose.yml)
+requires the matching engine: iii 0.23 removed the config.yaml worker lifecycle.
+An engine-only Dependabot upgrade must stay blocked until agentmemory supports
+the new lifecycle and its SDK/engine can be upgraded together. The telemetry
+helper security override below does not change the engine protocol version.
 Build and runtime both use Google's Distroless Debian 13 image family. The
 Node builder uses `:debug`, which provides BusyBox. It downloads pinned npm CLI
 source and verifies SHA-512 integrity before extraction. Its vendor-bundled
 dependencies are removed and replaced with the complete, separately locked and
 audited tree in `build/npm`; every package archive is integrity-verified before
 extraction. This allows compatible security patches without waiting for a new
-npm bundle. Full `npm audit` covers both dependency locks. Only production
+npm bundle. Bootstrap also checks npm's dependency ranges against the verified
+source archive; replacing an individual dependency with a new major version
+requires a compatible npm release. Full `npm audit` covers both dependency locks. Only production
 dependencies are copied into the app's `:nonroot` runtime; neither npm nor
 BusyBox is shipped. The engine also uses Distroless Debian 13. The iii vendor
 image is only an artifact source for its unchanged binary/data directories.

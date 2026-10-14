@@ -41,6 +41,9 @@ async function extract(entry, target) {
   } finally { rmSync(temp, { recursive: true, force: true }); }
 }
 await extract(pkg.npmSource, npmRoot);
+const source = JSON.parse(readFileSync(join(npmRoot, 'package.json')));
+assert.equal(source.version, pkg.version, 'Verified npm source version must match the build manifest');
+assert.deepEqual(source.dependencies, pkg.dependencies, 'npm dependency ranges must match verified source');
 // Vendor bundles cannot be patched by npm audit fix. Use the complete locked tree instead.
 rmSync(`${npmRoot}/node_modules`, { recursive: true, force: true });
 const entries = Object.entries(lock.packages).filter(([path]) => path);

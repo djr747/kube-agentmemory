@@ -1,6 +1,6 @@
 {
   "name": "kube-agentmemory",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": true,
   "type": "module",
   "description": "Secure Kubernetes packaging for agentmemory",
@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@agentmemory/agentmemory": "0.9.30",
-    "dotenv": "18.0.3"
+    "dotenv": "18.0.8"
   },
   "allowScripts": {
     "onnxruntime-node@1.30.0": true,

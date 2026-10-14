@@ -15,11 +15,11 @@ jobs:
   validate:
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22.23.3'
           cache: npm
@@ -28,7 +28,7 @@ jobs:
           node build/bootstrap-npm.mjs --ci
           ln -sf npm-cli.js .build-tools/npm/bin/npm
           echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0
       - run: make install release-check test chart audit
@@ -38,14 +38,14 @@ jobs:
           npm install --prefix build/npm --package-lock-only --ignore-scripts --no-audit --no-fund
           git diff --exit-code -- package-lock.json build/npm/package-lock.json
       - run: make package
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: chart
           path: dist/*.tgz
           if-no-files-found: error
       # SonarQube Cloud's GitHub App runs Automatic Analysis separately.
       # Do not inject SONAR_TOKEN into PR runs or add a conflicting scanner Action.
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: coverage
@@ -63,10 +63,10 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
         with:
           node-version: '22.23.3'
       - name: Install verified locked npm tool
@@ -74,7 +74,7 @@ jobs:
           node build/bootstrap-npm.mjs --ci
           ln -sf npm-cli.js .build-tools/npm/bin/npm
           echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
-      - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
+      - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
         with:
           version: v3.19.0
       - name: Build locked candidate
@@ -82,7 +82,7 @@ jobs:
           npm ci --include=optional --ignore-scripts --no-fund --no-audit
           docker build -t kube-agentmemory:ci .
           docker build -f Dockerfile.engine -t kube-agentmemory-engine:ci .
-      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
         with:
           name: chart
           path: dist
@@ -133,13 +133,13 @@ jobs:
         run: make integration
       - name: Save exactly the tested candidate
         run: docker save kube-agentmemory:ci kube-agentmemory-engine:ci -o candidate.tar
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: candidate-${{ matrix.arch }}
           path: candidate.tar
           retention-days: 1
           if-no-files-found: error
-      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
         with:
           name: reports-${{ matrix.arch }}

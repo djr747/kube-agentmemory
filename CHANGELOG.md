@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.1.1] - 2026-10-14
+
+- Update checkout to 7.0.1, setup-node to 7.1.0, upload-artifact to 7.0.2,
+  download-artifact to 8.0.2 and setup-helm to 5.0.1 at verified vendor commits.
+- Update dotenv to 18.0.8 and refresh the application dependency lock.
+- Stage grouped Dependabot version updates through develop and keep npm tool
+  updates within vendor dependency ranges, verified again during bootstrap.
+- Keep the upstream-supported iii engine/SDK pair at 0.22.1; newer engines remove
+  the worker configuration lifecycle required by agentmemory 0.9.30.
+
 ## [0.1.0] - 2026-10-14
 
 - Initial locked agentmemory container build with built-in local embeddings.
