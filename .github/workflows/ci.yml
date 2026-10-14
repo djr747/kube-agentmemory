@@ -28,7 +28,7 @@ jobs:
           NPM_BOOTSTRAP_TAR: tar
         run: |
           node build/bootstrap-npm.mjs build/npm "$RUNNER_TEMP/agentmemory-npm"
-          ln -s npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
+          ln -sf npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
           echo "$RUNNER_TEMP/agentmemory-npm/bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
@@ -97,7 +97,7 @@ jobs:
           NPM_BOOTSTRAP_TAR: tar
         run: |
           node build/bootstrap-npm.mjs build/npm "$RUNNER_TEMP/agentmemory-npm"
-          ln -s npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
+          ln -sf npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
           echo "$RUNNER_TEMP/agentmemory-npm/bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
