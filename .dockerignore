@@ -1,6 +1,7 @@
 .git
 .github
 node_modules
+.build-tools
 dist
 coverage
 test-results

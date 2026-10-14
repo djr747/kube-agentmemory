@@ -8,21 +8,23 @@ export const secretNames = [
   'MINIMAX_API_KEY', 'VOYAGE_API_KEY', 'COHERE_API_KEY', 'AGENTMEMORY_REDIS_URL',
 ];
 
-export function loadSecrets(env = process.env, read = readFileSync) {
-  if (env.AGENTMEMORY_ENV_FILE) {
-    let values;
-    try {
-      values = parse(read(env.AGENTMEMORY_ENV_FILE, 'utf8'));
-    } catch {
-      throw new Error('Cannot read AGENTMEMORY_ENV_FILE');
-    }
-    for (const [name, value] of Object.entries(values)) {
-      if (!secretNames.includes(name)) {
-        throw new Error(`Unsupported credential in AGENTMEMORY_ENV_FILE: ${name}`);
-      }
-      if (env[name] === undefined && env[`${name}_FILE`] === undefined) env[name] = value;
-    }
+function loadEnvFile(env, read) {
+  if (!env.AGENTMEMORY_ENV_FILE) return;
+  let values;
+  try {
+    values = parse(read(env.AGENTMEMORY_ENV_FILE, 'utf8'));
+  } catch {
+    throw new Error('Cannot read AGENTMEMORY_ENV_FILE');
   }
+  for (const [name, value] of Object.entries(values)) {
+    if (!secretNames.includes(name)) {
+      throw new Error(`Unsupported credential in AGENTMEMORY_ENV_FILE: ${name}`);
+    }
+    if (env[name] === undefined && env[`${name}_FILE`] === undefined) env[name] = value;
+  }
+}
+
+function loadFileCredentials(env, read) {
   for (const name of secretNames) {
     const path = env[`${name}_FILE`];
     if (!path) continue;
@@ -34,6 +36,11 @@ export function loadSecrets(env = process.env, read = readFileSync) {
     }
     if (!env[name]) throw new Error(`Empty credential: ${name}_FILE`);
   }
+}
+
+export function loadSecrets(env = process.env, read = readFileSync) {
+  loadEnvFile(env, read);
+  loadFileCredentials(env, read);
   if (!env.AGENTMEMORY_SECRET || env.AGENTMEMORY_SECRET.length < 32) {
     throw new Error('AGENTMEMORY_SECRET must contain at least 32 characters');
   }

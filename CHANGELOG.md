@@ -23,5 +23,8 @@
   during dependency-lock freshness checks.
 - API OIDC integration waits for replacement Service routing before checking
   authentication, while preserving strict HTTP and NetworkPolicy assertions.
+- Hardened npm bootstrap destinations and private extraction directories,
+  script-free CI installation, bounded worker downloads, simpler credential and
+  readiness handling, and adjustable ephemeral-storage budgets for all containers.
 - Single release-version source, generated Helm package metadata, keyless image
   signatures, image/chart provenance, signed architecture SBOMs and annotated release tags.

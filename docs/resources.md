@@ -5,17 +5,25 @@ built-in `all-MiniLM-L6-v2` embeddings. They cover the integration workload, not
 a measured capacity guarantee. The first embedding loads/downloads a model and
 can use more CPU/memory than idle operation.
 
-| Container / Helm key | CPU request | Memory request | CPU limit | Memory limit |
-| --- | --- | --- | --- | --- |
-| App / `resources` | 250m | 512Mi | 2 CPUs | 2Gi |
-| Engine / `engine.resources` | 100m | 128Mi | 1 CPU | 1Gi |
-| Optional proxy / `oauth2Proxy.resources` | 50m | 64Mi | 500m | 256Mi |
+| Container / Helm key | CPU request | Memory request | CPU limit | Memory limit | Ephemeral request | Ephemeral limit |
+| --- | --- | --- | --- | --- | --- | --- |
+| App / `resources` | 250m | 512Mi | 2 CPUs | 2Gi | 100Mi | 512Mi |
+| Engine / `engine.resources` | 100m | 128Mi | 1 CPU | 1Gi | 50Mi | 256Mi |
+| Optional proxy / `oauth2Proxy.resources` | 50m | 64Mi | 500m | 256Mi | 10Mi | 64Mi |
 
 Without SSO, scheduling requests total 350m CPU and 640Mi memory; limits total
 3 CPUs and 3Gi. With SSO, totals are 400m/704Mi requested and 3.5 CPUs/3.25Gi
 limited. Vault-injected containers, cluster services and a separate identity
 provider add their own requirements. Reserve node headroom for those and model
 startup; a memory request does not prevent the workload using up to its limit.
+
+Ephemeral storage covers container logs, writable layers and disk-backed
+`emptyDir` volumes, including `/tmp`. Requests total 150Mi and limits total 768Mi
+without SSO, or 160Mi/832Mi with SSO. Persistent memory and downloaded model
+weights use the PVC and are sized separately by `persistence.size`. Increase
+`requests.ephemeral-storage` and `limits.ephemeral-storage` in the same resource
+overlays when temporary files or logs grow; exceeding the Pod budget can cause
+eviction.
 
 Kubernetes schedules using requests, throttles CPU at limits and can terminate
 containers that exceed memory limits. See

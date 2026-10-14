@@ -14,8 +14,8 @@ engine:
     digest: ""
     pullPolicy: IfNotPresent
   resources:
-    requests: {cpu: 100m, memory: 128Mi}
-    limits: {cpu: "1", memory: 1Gi}
+    requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 50Mi}
+    limits: {cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi}
 persistence:
   size: 10Gi
   storageClass: "" # Omitted to use the cluster default; '-' means no class
@@ -58,8 +58,8 @@ extraVolumeMounts: []
 podAnnotations: {}
 podLabels: {} # For example, azure.workload.identity/use: "true"
 resources:
-  requests: {cpu: 250m, memory: 512Mi}
-  limits: {cpu: "2", memory: 2Gi}
+  requests: {cpu: 250m, memory: 512Mi, ephemeral-storage: 100Mi}
+  limits: {cpu: "2", memory: 2Gi, ephemeral-storage: 512Mi}
 terminationGracePeriodSeconds: 60
 nodeSelector: {}
 tolerations: []
@@ -100,8 +100,8 @@ oauth2Proxy:
     cookieSecret: "" # raw binary AES key: exactly 16, 24 or 32 bytes
   extraVolumeMounts: []
   resources:
-    requests: {cpu: 50m, memory: 64Mi}
-    limits: {cpu: 500m, memory: 256Mi}
+    requests: {cpu: 50m, memory: 64Mi, ephemeral-storage: 10Mi}
+    limits: {cpu: 500m, memory: 256Mi, ephemeral-storage: 64Mi}
 networkPolicy:
   enabled: true
   # Default allows API clients only from the release namespace. Set selectors for Traefik.

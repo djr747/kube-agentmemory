@@ -4,7 +4,7 @@ GRYPE ?= grype
 
 .PHONY: install check test audit chart build integration package security release-check release-sync
 install:
-	npm ci --include=optional
+	npm ci --include=optional --ignore-scripts
 check:
 	npm run check
 	node --check tests/package-chart.mjs

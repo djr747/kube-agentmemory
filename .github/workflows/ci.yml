@@ -24,12 +24,10 @@ jobs:
           node-version: '22.23.3'
           cache: npm
       - name: Install verified locked npm tool
-        env:
-          NPM_BOOTSTRAP_TAR: tar
         run: |
-          node build/bootstrap-npm.mjs build/npm "$RUNNER_TEMP/agentmemory-npm"
-          ln -sf npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
-          echo "$RUNNER_TEMP/agentmemory-npm/bin" >> "$GITHUB_PATH"
+          node build/bootstrap-npm.mjs --ci
+          ln -sf npm-cli.js .build-tools/npm/bin/npm
+          echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.19.0
@@ -72,18 +70,16 @@ jobs:
         with:
           node-version: '22.23.3'
       - name: Install verified locked npm tool
-        env:
-          NPM_BOOTSTRAP_TAR: tar
         run: |
-          node build/bootstrap-npm.mjs build/npm "$RUNNER_TEMP/agentmemory-npm"
-          ln -sf npm-cli.js "$RUNNER_TEMP/agentmemory-npm/bin/npm"
-          echo "$RUNNER_TEMP/agentmemory-npm/bin" >> "$GITHUB_PATH"
+          node build/bootstrap-npm.mjs --ci
+          ln -sf npm-cli.js .build-tools/npm/bin/npm
+          echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@1a275c3b69536ee54be43f2070a358922e12c8d4 # v4.3.1
         with:
           version: v3.19.0
       - name: Build locked candidate
         run: |
-          npm ci --include=optional --no-fund --no-audit
+          npm ci --include=optional --ignore-scripts --no-fund --no-audit
           docker build -t kube-agentmemory:ci .
           docker build -f Dockerfile.engine -t kube-agentmemory-engine:ci .
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0

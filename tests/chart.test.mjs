@@ -33,6 +33,8 @@ test('single writer, retained storage, restricted containers and private engine 
     assert.equal(container.securityContext.allowPrivilegeEscalation, false);
     assert.deepEqual(container.securityContext.capabilities.drop, ['ALL']);
     assert.ok(container.startupProbe);
+    assert.match(container.resources.requests['ephemeral-storage'], /^\d+(Mi|Gi)$/);
+    assert.match(container.resources.limits['ephemeral-storage'], /^\d+(Mi|Gi)$/);
   }
   for (const service of manifests.filter((m) => m.kind === 'Service')) {
     assert.deepEqual(service.spec.ports.map((p) => p.port), [3111]);
@@ -122,6 +124,8 @@ test('OAuth sidecar routes UI/API through SSO, isolates backend listeners and su
   assert.ok(proxy.args.includes('--cookie-secure=true'));
   assert.ok(proxy.args.includes('--code-challenge-method=S256'));
   assert.equal(proxy.env[0].valueFrom.secretKeyRef.name, 'agentmemory-oauth');
+  assert.equal(proxy.resources.requests['ephemeral-storage'], '10Mi');
+  assert.equal(proxy.resources.limits['ephemeral-storage'], '64Mi');
   const api = manifests.find((m) => m.kind === 'Ingress' && !m.metadata.name.endsWith('-ui'));
   assert.equal(api.spec.rules[0].http.paths[0].backend.service.port.number, 3111);
   const path = manifests.find((m) => m.kind === 'Ingress' && m.metadata.name.endsWith('-ui')).spec.rules[0].http.paths[0];
