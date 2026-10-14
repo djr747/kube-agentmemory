@@ -17,5 +17,7 @@
   aliases, OCI charts and GitHub Release artifacts.
 - Google Distroless Debian 13 throughout: debug build stage with audited,
   checksum-verified npm and shell-free nonroot app/engine runtimes.
+- Shared locked npm tooling for CI and builds to preserve platform metadata
+  during dependency-lock freshness checks.
 - Single release-version source, generated Helm package metadata, keyless image
   signatures, image/chart provenance, signed architecture SBOMs and annotated release tags.

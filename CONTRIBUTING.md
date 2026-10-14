@@ -2,6 +2,10 @@
 
 All tests and verification runners use JavaScript and live in `tests/`.
 Use Kubernetes 1.30+, Node 22.23.3, Docker, Helm 3.19 or newer, kubectl and Kind 0.33.0.
+CI and container builds use the same integrity-verified npm 12.2.0 tool and
+audited dependency lock. For matching local npm behavior, run
+`NPM_BOOTSTRAP_TAR=tar node build/bootstrap-npm.mjs build/npm /tmp/agentmemory-npm`,
+then use `node /tmp/agentmemory-npm/bin/npm-cli.js` in place of `npm`.
 
 Run the standard checks from the repository root:
 

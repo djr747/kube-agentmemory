@@ -5,8 +5,11 @@ import { readFileSync, writeFileSync, mkdirSync, rmSync, mkdtempSync } from 'nod
 import { execFileSync } from 'node:child_process';
 import { resolve } from 'node:path';
 
-const pkg = JSON.parse(readFileSync('/build/npm/package.json'));
-const lock = JSON.parse(readFileSync('/build/npm/package-lock.json'));
+const toolRoot = resolve(process.argv[2] || '/build/npm');
+const npmRoot = resolve(process.argv[3] || '/opt/npm');
+const tar = process.env.NPM_BOOTSTRAP_TAR || '/busybox/tar';
+const pkg = JSON.parse(readFileSync(`${toolRoot}/package.json`));
+const lock = JSON.parse(readFileSync(`${toolRoot}/package-lock.json`));
 assert.equal(lock.version, pkg.version);
 assert.deepEqual(lock.packages[''].dependencies, pkg.dependencies);
 assert.equal(pkg.npmSource.version, pkg.version);
@@ -23,18 +26,18 @@ async function extract(entry, target) {
   try {
     mkdirSync(target, { recursive: true });
     writeFileSync(`${temp}/package.tgz`, archive);
-    execFileSync('/busybox/tar', ['-xzf', `${temp}/package.tgz`, '-C', target, '--strip-components', '1']);
+    execFileSync(tar, ['-xzf', `${temp}/package.tgz`, '-C', target, '--strip-components', '1']);
   } finally { rmSync(temp, { recursive: true, force: true }); }
 }
-await extract(pkg.npmSource, '/opt/npm');
+await extract(pkg.npmSource, npmRoot);
 // Vendor bundles cannot be patched by npm audit fix. Use the complete locked tree instead.
-rmSync('/opt/npm/node_modules', { recursive: true, force: true });
+rmSync(`${npmRoot}/node_modules`, { recursive: true, force: true });
 const entries = Object.entries(lock.packages).filter(([path]) => path);
 for (let offset = 0; offset < entries.length; offset += 8) {
   await Promise.all(entries.slice(offset, offset + 8).map(async ([path, entry]) => {
     assert.match(path, /^node_modules\//);
-    const target = resolve('/opt/npm', path);
-    assert.ok(target.startsWith('/opt/npm/node_modules/'));
+    const target = resolve(npmRoot, path);
+    assert.ok(target.startsWith(`${npmRoot}/node_modules/`));
     await extract(entry, target);
   }));
 }
