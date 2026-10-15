@@ -9,8 +9,9 @@ The chart runs one StatefulSet replica with an iii engine and an application
 container sharing a retained PVC. Local state has one writer and no replication
 protocol; increasing replicas would create independent memory stores. Both
 containers run as UID 65532 with dropped capabilities, read-only filesystems and
-restricted security contexts. Only the REST API is exposed through a ClusterIP
-Service, with optional Traefik Ingress or Gateway API routing.
+restricted security contexts. The REST API has a ClusterIP Service; optional
+UI SSO adds a separate authenticated UI Service. Kubernetes Ingress or Gateway
+API can route to them without provider-specific WebSocket rules.
 The application runtime uses Google's public Distroless Node image, without a
 shell or package manager.
 
@@ -68,10 +69,10 @@ release is removed. Back them up using your storage snapshot/backup system;
 periodic application snapshots on the same volume do not protect against volume
 loss. Do not run more than one writer against a PVC.
 
-Port-forward for initial testing:
+New installs name Kubernetes resources after the Helm release. Port-forward the API for initial testing:
 
 ```sh
-kubectl -n agentmemory port-forward svc/memory-kube-agentmemory 3111:3111
+kubectl -n agentmemory port-forward svc/memory 3111:3111
 ```
 
 The API base is `http://127.0.0.1:3111/agentmemory`. Send
@@ -80,11 +81,15 @@ The API base is `http://127.0.0.1:3111/agentmemory`. Send
 `Xenova/all-MiniLM-L6-v2` into `/data/models`; network access is needed to warm
 this persistent cache. Verify vectors with authenticated `/agentmemory/status`.
 
-## Traefik access
+## Ingress and Gateway API access
 
 Overlay **one** of `examples/traefik-ingress.yaml` or
-`examples/traefik-gateway.yaml` onto your provider/secret values. Change the host,
-certificate Secret, controller namespace and pod labels to match your cluster.
+`examples/traefik-gateway.yaml` onto your provider/secret values. These are
+Traefik examples; the chart's UI routing uses a standard Service backend and
+does not require Traefik CRDs. For another controller, route the UI hostname to
+the chart's `-ui` Service on port 4180 and forward cookies, the browser's
+`Origin` header and WebSocket upgrades. Change the host, certificate Secret,
+controller namespace and pod labels to match your cluster.
 Both routes preserve `/agentmemory`; do not strip that prefix or log the
 Authorization header.
 
@@ -114,8 +119,23 @@ The UI uses a separate hostname; the API keeps its existing bearer token so
 standard agent integrations continue working. Set `oauth2Proxy.protectApi=true`
 only when agents can provide verified OIDC JWTs. Provider examples cover
 [Entra and local Keycloak](docs/oauth2-proxy.md). OAuth secrets support environment
-references, mounted files and Vault injection. The external proxy image is not
-built or scanned by this project.
+references, mounted files and Vault injection. UI SSO also adds the stock Caddy
+image for HTTP/WebSocket routing. Both external images are integration tested;
+neither is built or scanned by this project.
+
+With UI SSO, agents use the **API hostname**, for example
+`AGENTMEMORY_URL=https://memory.example.com`; they do not use the browser's
+`https://memory-ui.example.com` address. Keep the default bearer token in
+`AGENTMEMORY_SECRET`. The viewer may suggest a URL ending in `:3111`, such as
+`https://memory-ui.example.com:3111`; that is the pod's internal REST port and
+is not a valid Ingress/Gateway endpoint. Do not copy it for an agent. The API
+and UI each use public HTTPS port 443 through separate Ingress resources (or
+separate Gateway routes): the API route forwards to internal REST port 3111, and
+the UI route forwards to OAuth2 Proxy on internal port 4180. After authentication,
+it forwards to Caddy on localhost:4181, which sends HTTP to the viewer and root
+WebSocket upgrades to the engine listener. The bearer API bypasses both proxies.
+No AgentMemory source patches or custom proxy code are required. See the
+[endpoint and SSO details](docs/oauth2-proxy.md).
 
 For Azure Key Vault or another Secrets Store CSI provider, see
 [CSI secrets](docs/csi-secrets.md) and `examples/csi-azure.yaml`. Adjust app,
@@ -125,7 +145,8 @@ engine and proxy CPU/memory independently using the documented
 ## CI and security
 
 CI validates the dependency lock, release metadata, unit/chart tests and examples.
-It audits npm dependencies, scans the app **and engine** with Anchore Grype,
+It audits npm dependencies and scans only the app and engine images built by
+this project with Anchore Grype,
 creates an SBOM, and runs the packaged-chart integration on native amd64 and
 arm64 runners. High/critical findings with published fixes block the build; all
 findings are retained in reports and unfixed high/critical findings remain visible

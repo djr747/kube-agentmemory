@@ -1,3 +1,5 @@
+# Resource names default to the Helm release name. Set fullnameOverride to
+# preserve an existing resource/PVC identity during an upgrade.
 nameOverride: ""
 fullnameOverride: ""
 image:
@@ -8,6 +10,8 @@ image:
 imagePullSecrets: []
 engine:
   shutdownDelaySeconds: 5 # Allow the last periodic state-store flush after app shutdown
+  # Reserved: 3111, 3113, 49134; also 4180 and 4181 when oauth2Proxy.enabled=true.
+  streamPort: 443 # Viewer dials the same HTTPS port; Caddy forwards authenticated root WebSocket upgrades here
   image:
     repository: ghcr.io/djr747/kube-agentmemory-engine
     tag: "" # Chart appVersion; Dockerfile.engine preserves the paired iii-sdk pin
@@ -50,7 +54,7 @@ env:
   AGENTMEMORY_ALLOW_AGENT_SDK: "false"
   AGENTMEMORY_STATE_SAVE_INTERVAL_MS: "2000"
   AGENTMEMORY_INDEX_SAVE_INTERVAL_MS: "2000"
-# Arbitrary upstream variables, Secret refs and file paths are supported here.
+# Upstream variables, Secret refs and file paths; use engine.streamPort for III_STREAM_PORT.
 extraEnv: []
 envFrom: []
 extraVolumes: []
@@ -102,6 +106,16 @@ oauth2Proxy:
   resources:
     requests: {cpu: 50m, memory: 64Mi, ephemeral-storage: 10Mi}
     limits: {cpu: 500m, memory: 256Mi, ephemeral-storage: 64Mi}
+# Stock Caddy is used only with UI SSO; it listens on localhost behind OAuth2 Proxy.
+caddy:
+  image:
+    repository: docker.io/library/caddy
+    tag: 2.11.7-alpine
+    digest: ""
+    pullPolicy: IfNotPresent
+  resources:
+    requests: {cpu: 25m, memory: 32Mi, ephemeral-storage: 10Mi}
+    limits: {cpu: 250m, memory: 128Mi, ephemeral-storage: 64Mi}
 networkPolicy:
   enabled: true
   # Default allows API clients only from the release namespace. Set selectors for Traefik.

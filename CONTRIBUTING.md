@@ -28,7 +28,7 @@ invariants, all examples, and release/dependency synchronization. `make audit`
 audits both the app lock and `build/npm` tool lock and fails on high/critical
 dependency advisories. The Distroless debug builder assembles npm from verified
 source and that tool lock, removing its vulnerable vendor bundle. Container CI additionally scans
-both the built application and paired iii engine with Anchore Grype, failing on
+the built application and paired iii engine with Anchore Grype, failing on
 high/critical findings with published fixes. Full reports retain all severities;
 unfixed high/critical findings are listed in the CI summary. This policy matches
 the repository owner's chosen reference procedure. There are no advisory
@@ -50,11 +50,15 @@ workflow does not wait for or prove that external check. See the README setup.
 For `make security`, install the official Grype 0.120.1 CLI or pass its path with
 `GRYPE=/path/to/grype`. It writes full application/engine reports to `test-results/`
 and applies the same JavaScript policy gate as CI. Reports are not committed.
+Image scanning covers only images built by this repository. Stock Caddy and
+OAuth2 Proxy images are covered by integration tests but are not scanned here.
 
 `make integration` creates a disposable Kind cluster, deploys the **packaged**
 chart, checks authentication, real local vector generation, memory search,
 replacement-Pod persistence, file credentials, retained PVCs and reinstall
-persistence. It deliberately uses ClusterIP port 8080 and checks numeric endpoint
+persistence. Before creating the cluster, it uses the official Caddy binary to
+check routing order and stream backend selection at ports 443 and 3212.
+It deliberately uses ClusterIP port 8080 and checks numeric endpoint
 targets and direct headless access in both bearer and OIDC modes. It uses a
 temporary kubeconfig and removes only the cluster it
 created. Tests never deploy to your current cluster. Supply a packaged chart with
@@ -63,12 +67,15 @@ same bytes. A previously created test
 cluster may be reused only with `REUSE_CLUSTER=true`, an explicit `KUBECONFIG`
 and an `INTEGRATION_CLUSTER` starting with `agentmemory-integration-`.
 
-The suite also tests the optional external OAuth2 Proxy image with a local
+The suite also tests the optional external OAuth2 Proxy and stock Caddy images with a local
 JavaScript OIDC issuer, using PKCE, secure cookies and both environment/file
-OAuth credentials. It verifies bearer-token API access after SSO is enabled.
+OAuth credentials. Through the UI Service from a separate Pod, it checks
+authenticated HTTP and root WebSocket routing, cross-origin rejection and
+session reuse across changing forwarded headers. It verifies bearer-token API
+access after SSO is enabled. Caddy's loopback-only listener has no Service port.
 It then opts into API OIDC, accepts a signed JWT and rejects invalid tokens and
 the original memory secret on the API Service.
-The external proxy image is neither built nor scanned by this repository.
+Neither external sidecar image is built or scanned by this repository.
 
 The initial model download needs public HTTPS access and a few minutes. Allow
 at least 4 GiB for the test cluster. Current Kind supports

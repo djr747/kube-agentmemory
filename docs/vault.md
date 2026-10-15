@@ -48,7 +48,7 @@ the documented `vault.hashicorp.com/tls-secret` and
 For external provider keys, overlay `examples/external-provider.yaml` and set
 the actual model. List each required key in `vault.fields`; missing fields make
 the injector fail rather than start with absent credentials. On rotation,
-restart `statefulset/memory-kube-agentmemory`. Agent renewal alone cannot refresh
+restart `statefulset/memory`. Agent renewal alone cannot refresh
 credentials already loaded into the Node process.
 
 Reference: [official injector annotations](https://developer.hashicorp.com/vault/docs/deploy/kubernetes/injector/annotations).

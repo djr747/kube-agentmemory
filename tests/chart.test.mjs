@@ -22,12 +22,19 @@ const auth = ['--set', 'secrets.existingSecret=auth'];
 test('single writer, retained storage, restricted containers and private engine ports', () => {
   const manifests = render(auth);
   const sts = manifests.find((m) => m.kind === 'StatefulSet');
+  assert.equal(sts.metadata.name, 'memory');
   assert.equal(sts.spec.replicas, 1);
+  assert.equal(sts.spec.volumeClaimTemplates[0].apiVersion, 'v1');
+  assert.equal(sts.spec.volumeClaimTemplates[0].kind, 'PersistentVolumeClaim');
   assert.equal(sts.spec.persistentVolumeClaimRetentionPolicy.whenDeleted, 'Retain');
   assert.equal(sts.spec.template.spec.automountServiceAccountToken, false);
   assert.equal(sts.spec.template.spec.securityContext.runAsNonRoot, true);
   assert.equal(sts.spec.template.spec.initContainers[0].restartPolicy, 'Always');
   assert.equal(sts.spec.template.spec.initContainers[0].lifecycle.preStop.sleep.seconds, 5);
+  assert.equal(sts.spec.template.spec.initContainers[0].ports.find((p) => p.name === 'stream').containerPort, 443);
+  assert.equal(sts.spec.template.spec.initContainers[0].env.find((e) => e.name === 'III_STREAM_PORT').value, '443');
+  assert.deepEqual(sts.spec.template.spec.initContainers[0].securityContext.capabilities.add, ['NET_BIND_SERVICE']);
+  assert.equal(sts.spec.template.spec.containers.find((c) => c.name === 'app').env.find((e) => e.name === 'III_STREAM_PORT').value, '443');
   for (const container of [...sts.spec.template.spec.containers, ...sts.spec.template.spec.initContainers]) {
     assert.equal(container.securityContext.readOnlyRootFilesystem, true);
     assert.equal(container.securityContext.allowPrivilegeEscalation, false);
@@ -42,6 +49,7 @@ test('single writer, retained storage, restricted containers and private engine 
   }
   const config = manifests.find((m) => m.kind === 'ConfigMap').data['config.yaml'];
   assert.match(config, /iii-worker-manager\n\s+config:\n\s+host: 127.0.0.1/);
+  assert.match(config, /iii-stream\n\s+config:\n\s+host: 127\.0\.0\.1\n\s+port: \$\{III_STREAM_PORT:3112\}/);
   const net = manifests.find((m) => m.kind === 'NetworkPolicy');
   assert.deepEqual(net.spec.policyTypes, ['Ingress', 'Egress']);
   assert.deepEqual(net.spec.ingress[0].ports, [{ protocol: 'TCP', port: 3111 }]);
@@ -50,13 +58,93 @@ test('API OIDC is opt-in, removes direct ingress and changes both Service target
   assert.match(render([...auth, '--set', 'oauth2Proxy.protectApi=true'], false), /requires oauth2Proxy.enabled/);
   for (const route of ['traefik-ingress', 'traefik-gateway']) {
     const docs = render([...auth, '-f', `examples/${route}.yaml`, '-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']);
-    for (const service of docs.filter((m) => m.kind === 'Service')) {
+    for (const service of docs.filter((m) => m.kind === 'Service' && !m.metadata.name.endsWith('-ui'))) {
       assert.ok(service.spec.ports.every((port) => port.targetPort === 4180));
     }
-    assert.deepEqual(docs.find((m) => m.kind === 'NetworkPolicy').spec.ingress[0].ports, [{ protocol: 'TCP', port: 4180 }]);
+    const uiService = docs.find((m) => m.kind === 'Service' && m.metadata.name === 'memory-ui');
+    assert.equal(uiService.spec.ports[0].targetPort, 4180);
+    assert.deepEqual(docs.find((m) => m.kind === 'NetworkPolicy').spec.ingress[0].ports,
+      [{ protocol: 'TCP', port: 4180 }]);
     const proxy = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec.containers.find((c) => c.name === 'oauth2-proxy');
     assert.ok(proxy.args.includes('--skip-jwt-bearer-tokens=true'));
+    assert.ok(proxy.args.includes('--proxy-websockets=true'));
+    assert.ok(proxy.args.includes('--upstream=http://127.0.0.1:4181/'));
+    assert.equal(proxy.args.filter((arg) => arg.startsWith('--upstream=')).length, 1);
+    const caddy = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec.containers.find((c) => c.name === 'caddy');
+    assert.equal(caddy.image, 'docker.io/library/caddy:2.11.7-alpine');
+    assert.equal(caddy.ports, undefined, 'Caddy must not expose a Pod-IP listener');
+    const config = docs.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-caddy').data.Caddyfile;
+    assert.match(config, /reverse_proxy 127\.0\.0\.1:443/);
   }
+  const custom = render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set', 'engine.streamPort=3212']);
+  const customSts = custom.find((m) => m.kind === 'StatefulSet');
+  const app = customSts.spec.template.spec.containers.find((c) => c.name === 'app');
+  const engine = customSts.spec.template.spec.initContainers[0];
+  assert.equal(app.env.find((e) => e.name === 'III_STREAM_PORT').value, '3212');
+  assert.equal(engine.env.find((e) => e.name === 'III_STREAM_PORT').value, '3212');
+  assert.match(custom.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-caddy').data.Caddyfile, /reverse_proxy 127\.0\.0\.1:3212/);
+  assert.equal(engine.securityContext.capabilities.add, undefined);
+  assert.match(custom.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-engine').data['config.yaml'], /port: \$\{III_STREAM_PORT:3112\}/);
+});
+test('stream port overrides in env and extraEnv are rejected in every auth mode', () => {
+  const sources = [
+    { value: '3212' },
+    { value: '443' },
+    { valueFrom: { secretKeyRef: { name: 'runtime-secret', key: 'port' } } },
+    { valueFrom: { configMapKeyRef: { name: 'runtime-config', key: 'port' } } },
+    { valueFrom: { fieldRef: { fieldPath: 'metadata.annotations["stream-port"]' } } },
+  ];
+  for (const mode of [[], ['-f', 'examples/oauth2-proxy.yaml'],
+    ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+    assert.match(render([...auth, ...mode, '--set-string', 'env.III_STREAM_PORT=3212'], false),
+      /Set engine\.streamPort instead of env\.III_STREAM_PORT/);
+    for (const source of sources) {
+      const extraEnv = [{ name: 'EXTRA_SETTING', value: 'kept' }, { name: 'III_STREAM_PORT', ...source }];
+      assert.match(render([...auth, ...mode, '--set-json', `extraEnv=${JSON.stringify(extraEnv)}`], false),
+        /Set engine\.streamPort instead of extraEnv III_STREAM_PORT/);
+    }
+  }
+});
+test('unrelated extraEnv and envFrom preserve the chart-managed stream port', () => {
+  const extraEnv = [{ name: 'EXTRA_SETTING', value: 'kept' },
+    { name: 'OTHER_SETTING', valueFrom: { configMapKeyRef: { name: 'runtime-config', key: 'setting' } } }];
+  const envFrom = [{ configMapRef: { name: 'runtime-config' } }];
+  for (const port of [443, 3212]) {
+    const docs = render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set', `engine.streamPort=${port}`,
+      '--set-json', `extraEnv=${JSON.stringify(extraEnv)}`, '--set-json', `envFrom=${JSON.stringify(envFrom)}`]);
+    const pod = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec;
+    const app = pod.containers.find((c) => c.name === 'app');
+    for (const container of [app, pod.initContainers[0]]) {
+      assert.deepEqual(container.env.filter((e) => e.name === 'III_STREAM_PORT'),
+        [{ name: 'III_STREAM_PORT', value: String(port) }]);
+    }
+    assert.deepEqual(app.env.slice(-extraEnv.length), extraEnv);
+    assert.deepEqual(app.envFrom, envFrom);
+    assert.ok(docs.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-caddy')
+      .data.Caddyfile.includes(`reverse_proxy 127.0.0.1:${port}`));
+  }
+});
+test('stream ports cannot collide with REST, viewer or worker listeners in any auth mode', () => {
+  for (const mode of [[], ['-f', 'examples/oauth2-proxy.yaml'],
+    ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+    for (const port of [3111, 3113, 49134]) {
+      assert.match(render([...auth, ...mode, '--set', `engine.streamPort=${port}`], false),
+        /engine\.streamPort conflicts with a reserved pod listener/);
+    }
+  }
+});
+test('SSO listener ports are reserved only while the proxy sidecars are enabled', () => {
+  for (const port of [4180, 4181]) {
+    for (const mode of [['-f', 'examples/oauth2-proxy.yaml'],
+      ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+      assert.match(render([...auth, ...mode, '--set', `engine.streamPort=${port}`], false),
+        /engine\.streamPort conflicts with a UI SSO listener/);
+    }
+    const sts = render([...auth, '--set', `engine.streamPort=${port}`]).find((m) => m.kind === 'StatefulSet');
+    assert.equal(sts.spec.template.spec.initContainers[0].ports.find((p) => p.name === 'stream').containerPort, port);
+  }
+  for (const port of [1, 65535]) render([...auth, '--set', `engine.streamPort=${port}`]);
+  for (const port of [0, 65536]) assert.match(render([...auth, '--set', `engine.streamPort=${port}`], false), /streamPort/);
 });
 test('custom ClusterIP ports retain numeric targets and headless ports match the listener', () => {
   const modes = [
@@ -72,6 +160,34 @@ test('custom ClusterIP ports retain numeric targets and headless ports match the
     assert.equal(headless.spec.ports[0].port, listener);
     assert.equal(headless.spec.ports[0].targetPort, listener);
   }
+});
+test('stock Caddy stays behind authentication, restricts WebSocket origins and has no credentials', () => {
+  const docs = render([...auth, '-f', 'examples/oauth2-proxy.yaml']);
+  const sts = docs.find((m) => m.kind === 'StatefulSet');
+  const caddy = sts.spec.template.spec.containers.find((c) => c.name === 'caddy');
+  assert.deepEqual(caddy.command, ['caddy']);
+  assert.equal(caddy.securityContext.readOnlyRootFilesystem, true);
+  assert.equal(caddy.securityContext.allowPrivilegeEscalation, false);
+  assert.deepEqual(caddy.securityContext.capabilities, { drop: ['ALL'], add: ['NET_BIND_SERVICE'] });
+  assert.deepEqual(caddy.volumeMounts.map((m) => m.name), ['caddy-config', 'caddy-tmp']);
+  assert.ok(caddy.env.every((e) => !e.valueFrom && !e.name.includes('SECRET')));
+  assert.deepEqual(caddy.readinessProbe.exec.command, ['/bin/busybox', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:4181/healthz']);
+  assert.match(sts.spec.template.metadata.annotations['checksum/caddy'], /^[a-f0-9]{64}$/);
+  const config = docs.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-caddy').data.Caddyfile;
+  for (const text of ['admin off', 'persist_config off', 'auto_https off', 'bind 127.0.0.1',
+    'not header Origin "https://memory-ui.example.com"', 'respond @wrongOrigin 403',
+    'header_up -Cookie', 'header_up -Authorization', 'reverse_proxy 127.0.0.1:3113']) assert.ok(config.includes(text), text);
+  assert.ok(docs.filter((m) => m.kind === 'Service').every((s) => s.spec.ports.every((p) => p.targetPort !== 4181)));
+  assert.ok(!render(auth).some((m) => m.kind === 'ConfigMap' && m.metadata.name.endsWith('-caddy')));
+});
+test('Caddy image and resources are configurable and unsafe public host input is rejected', () => {
+  const docs = render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set', 'caddy.resources.limits.memory=256Mi',
+    '--set', `caddy.image.digest=sha256:${'a'.repeat(64)}`]);
+  const caddy = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec.containers.find((c) => c.name === 'caddy');
+  assert.equal(caddy.image, `docker.io/library/caddy@sha256:${'a'.repeat(64)}`);
+  assert.equal(caddy.resources.limits.memory, '256Mi');
+  assert.match(render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set-string', 'oauth2Proxy.uiHost=bad\nrespond 200'], false), /uiHost/);
+  assert.match(render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set', 'caddy.image.tag='], false), /caddy.image/);
 });
 test('Entra, Keycloak, CSI identity/file mounts and resource overrides render', () => {
   for (const provider of ['entra', 'keycloak']) {
@@ -101,6 +217,12 @@ test('Entra, Keycloak, CSI identity/file mounts and resource overrides render', 
   assert.equal(keycloak[0].spec.template.spec.containers[0].env[1].valueFrom.secretKeyRef.name, 'keycloak-bootstrap');
   assert.equal(keycloak[2].spec.tls[0].hosts[0], 'identity.example.com');
 });
+test('full name override preserves existing resource identities', () => {
+  const docs = render([...auth, '--set', 'fullnameOverride=agentmemory-kube-agentmemory']);
+  const sts = docs.find((m) => m.kind === 'StatefulSet');
+  assert.equal(sts.metadata.name, 'agentmemory-kube-agentmemory');
+  assert.equal(sts.spec.serviceName, 'agentmemory-kube-agentmemory-headless');
+});
 test('refuses unauthenticated or incomplete routing configuration', () => {
   assert.match(render([], false), /Configure secrets/);
   assert.match(render([...auth, '--set', 'ingress.enabled=true'], false), /tlsSecretName/);
@@ -110,6 +232,7 @@ test('Vault uses raw files and a token volume isolated from application containe
   const manifests = render(['-f', 'examples/vault.yaml']);
   const pod = manifests.find((m) => m.kind === 'StatefulSet').spec.template;
   assert.match(pod.metadata.annotations['vault.hashicorp.com/agent-inject-template-AGENTMEMORY_SECRET'], /\{\{- with secret/);
+  assert.equal(pod.metadata.annotations['vault.hashicorp.com/preserve-secret-case'], 'true');
   assert.equal(pod.metadata.annotations['vault.hashicorp.com/agent-inject-containers'], 'app');
   assert.equal(pod.spec.automountServiceAccountToken, false);
   assert.equal(pod.spec.volumes.find((v) => v.name === 'vault-token').projected.sources[0].serviceAccountToken.audience, 'vault');
@@ -136,7 +259,7 @@ test('OAuth sidecar routes UI/API through SSO, isolates backend listeners and su
   const manifests = render([...auth, '-f', 'examples/traefik-ingress.yaml', '-f', 'examples/oauth2-proxy.yaml']);
   const pod = manifests.find((m) => m.kind === 'StatefulSet').spec.template.spec;
   const proxy = pod.containers.find((c) => c.name === 'oauth2-proxy');
-  assert.ok(proxy.args.includes('--upstream=http://127.0.0.1:3113'));
+  assert.ok(proxy.args.includes('--upstream=http://127.0.0.1:4181/'));
   assert.ok(proxy.args.includes('--cookie-secure=true'));
   assert.ok(proxy.args.includes('--code-challenge-method=S256'));
   assert.equal(proxy.env[0].valueFrom.secretKeyRef.name, 'agentmemory-oauth');

@@ -2,7 +2,7 @@
 {{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
 {{- end -}}
 {{- define "agentmemory.fullname" -}}
-{{- default (printf "%s-%s" .Release.Name (include "agentmemory.name" .)) .Values.fullnameOverride | trunc 54 | trimSuffix "-" -}}
+{{- default .Release.Name .Values.fullnameOverride | trunc 54 | trimSuffix "-" -}}
 {{- end -}}
 {{- define "agentmemory.selector" -}}
 app.kubernetes.io/name: {{ include "agentmemory.name" . }}

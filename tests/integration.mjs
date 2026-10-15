@@ -37,12 +37,14 @@ function diagnostics() {
     ['app.log', ['logs', 'memory-0', '-c', 'app']],
     ['engine.log', ['logs', 'memory-0', '-c', 'engine']],
     ['oauth2-proxy.log', ['logs', 'memory-0', '-c', 'oauth2-proxy']],
+    ['caddy.log', ['logs', 'memory-0', '-c', 'caddy']],
   ]) {
     try { writeFileSync(join(results, file), capture('kubectl', ['--context', context, '-n', 'agentmemory', ...args])); }
     catch { /* Preserve the original test failure even when diagnostics are unavailable. */ }
   }
 }
 try {
+  run('node', ['tests/caddy-config.mjs']);
   if (!reuse) {
     const clusters = capture('kind', ['get', 'clusters']).split('\n');
     assert.ok(!clusters.includes(cluster), 'Refusing to adopt an existing cluster');
@@ -79,6 +81,9 @@ try {
       ...files.flatMap((file) => ['-f', file]), '--wait', '--timeout', '600s']);
     kube(['rollout', 'status', 'statefulset/memory', '--timeout=600s']);
     kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
+    const streamPort = capture('kubectl', ['--context', context, '-n', 'agentmemory', 'exec', 'memory-0', '-c', 'app', '--', 'node', '-e',
+      "fetch('http://127.0.0.1:3111/agentmemory/livez').then(async r => { const live = await r.json(); console.log(live.streamsPort); })"]);
+    assert.equal(streamPort, '443', 'AgentMemory must advertise the HTTPS WebSocket listener port');
     const services = JSON.parse(capture('kubectl', ['--context', context, '-n', 'agentmemory',
       'get', 'services', 'memory', 'memory-headless', '-o', 'json'])).items;
     const primary = services.find((s) => s.metadata.name === 'memory');
@@ -142,14 +147,15 @@ try {
   const oauthValues = join(temp, 'oauth-values.yaml');
   writeFileSync(oauthValues, stringify({ oauth2Proxy: { enabled: true,
     issuerUrl: 'http://oidc-fixture.agentmemory.svc.cluster.local:8080', clientId: 'agentmemory-integration',
-    uiHost: 'memory-ui.example.com', redirectUrl: 'https://memory-ui.example.com/oauth2/callback', emailDomains: ['test.example'], existingSecret: 'oauth-integration' },
+    uiHost: 'memory-ui.example.com', redirectUrl: 'https://memory-ui.example.com/oauth2/callback', emailDomains: ['test.example'],
+    allowedGroups: ['agentmemory-users'], existingSecret: 'oauth-integration' },
     env: { VIEWER_ALLOWED_ORIGINS: 'https://memory-ui.example.com' }, networkPolicy: { egress: [
       { to: [{ podSelector: { matchLabels: { app: 'oidc-fixture' } } }], ports: [{ protocol: 'TCP', port: 8080 }] },
     ] } }));
   deploy(['examples/local.yaml', oauthValues]);
   smoke('read', '/data/integration-test.json'); // Official bearer integrations still work with SSO enabled.
   apiBearerSmoke();
-  const oauthSmoke = () => kube(['exec', '-i', 'memory-0', '-c', 'app', '--', 'node', '--input-type=module'], {
+  const oauthSmoke = () => kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node', '--input-type=module'], {
     input: readFileSync('tests/fixtures/oauth-smoke.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
   });
   oauthSmoke();

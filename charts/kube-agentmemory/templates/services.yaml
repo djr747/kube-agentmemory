@@ -31,6 +31,20 @@ spec:
   selector:
     {{- include "agentmemory.selector" . | nindent 4 }}
 {{- end }}
+{{- if .Values.oauth2Proxy.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-ui
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports: [{name: ui, port: 4180, targetPort: 4180}]
+  selector:
+    {{- include "agentmemory.selector" . | nindent 4 }}
+{{- end }}
 ---
 apiVersion: v1
 kind: Service

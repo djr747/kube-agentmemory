@@ -1,0 +1,55 @@
+{{- if .Values.oauth2Proxy.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "agentmemory.fullname" . }}-caddy
+  labels:
+    {{- include "agentmemory.labels" . | nindent 4 }}
+data:
+  Caddyfile: |
+    {
+      admin off
+      persist_config off
+      auto_https off
+    }
+    http://:4181 {
+      bind 127.0.0.1
+      @health path /healthz
+      @wrongOrigin {
+        path /
+        header Connection *Upgrade*
+        header Upgrade websocket
+        not header Origin {{ printf "https://%s" .Values.oauth2Proxy.uiHost | quote }}
+      }
+      @stream {
+        path /
+        header Connection *Upgrade*
+        header Upgrade websocket
+      }
+      # Preserve order: health and origin checks must run before proxy handlers.
+      route {
+        respond @health 200
+        respond @wrongOrigin 403
+        handle @stream {
+          reverse_proxy 127.0.0.1:{{ .Values.engine.streamPort }} {
+            header_up -Cookie
+            header_up -Authorization
+            header_up Host {{ .Values.oauth2Proxy.uiHost | quote }}
+            header_up X-Forwarded-Host {{ .Values.oauth2Proxy.uiHost | quote }}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Port 443
+          }
+        }
+        handle {
+          reverse_proxy 127.0.0.1:3113 {
+            header_up -Cookie
+            header_up -Authorization
+            header_up Host {{ .Values.oauth2Proxy.uiHost | quote }}
+            header_up X-Forwarded-Host {{ .Values.oauth2Proxy.uiHost | quote }}
+            header_up X-Forwarded-Proto https
+            header_up X-Forwarded-Port 443
+          }
+        }
+      }
+    }
+{{- end }}

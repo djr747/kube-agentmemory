@@ -25,6 +25,13 @@ and test that exact archive. A source-chart install requires explicit app and
 engine image tags or digests. A packaged/released chart defaults to its generated
 release version.
 
+New chart installs name Kubernetes resources after the Helm release name. Before
+upgrading an installation created by an earlier chart version, set
+`fullnameOverride` to its existing StatefulSet name to preserve the StatefulSet
+and its PVC identity. For the existing `agentmemory` release, that value is
+`agentmemory-kube-agentmemory`; shortening it requires a separate, data-preserving
+PVC migration.
+
 After CI succeeds on main, the reusable release workflow:
 
 1. Checks the source revision and remote release state. An existing `vX.Y.Z`
@@ -61,9 +68,9 @@ For both image repositories, the next release aliases are:
 
 | Tag | Purpose |
 | --- | --- |
-| `0.1.1` | Project release; the chart's default |
+| `0.1.2` | Project release; the chart's default |
 | `0.1` / `0` | Moving minor/major aliases |
-| `0.1.1-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
+| `0.1.2-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
 | `latest` | Most recently published successful main release |
 | `sha-COMMIT-amd64` / `sha-COMMIT-arm64` | Exact architecture candidates |
 

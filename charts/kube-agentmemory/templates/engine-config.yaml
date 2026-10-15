@@ -36,7 +36,7 @@ data:
       - name: iii-stream
         config:
           host: 127.0.0.1
-          port: 3112
+          port: ${III_STREAM_PORT:3112}
           adapter:
             name: kv
             config:
