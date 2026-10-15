@@ -32,7 +32,7 @@ spec:
     - matches:
         - path: {type: PathPrefix, value: /}
       backendRefs:
-        - name: {{ include "agentmemory.fullname" . }}-auth
+        - name: {{ include "agentmemory.fullname" . }}-ui
           port: 4180
 {{- end }}
 {{- end }}

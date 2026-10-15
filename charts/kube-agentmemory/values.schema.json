@@ -82,6 +82,11 @@
         "shutdownDelaySeconds": {
           "type": "integer",
           "minimum": 1
+        },
+        "streamPort": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 65535
         }
       }
     },
@@ -316,6 +321,14 @@
         }
       }
     },
+    "caddy": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "image": { "$ref": "#/properties/image" },
+        "resources": { "type": "object" }
+      }
+    },
     "networkPolicy": {
       "type": "object",
       "additionalProperties": false,
@@ -426,7 +439,9 @@
           "type": "object"
         },
         "uiHost": {
-          "type": "string"
+          "type": "string",
+          "maxLength": 253,
+          "pattern": "^$|^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$"
         },
         "tlsSecretName": {
           "type": "string"

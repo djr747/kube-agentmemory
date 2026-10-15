@@ -7,7 +7,7 @@ const clientId = 'agentmemory-integration';
 const { publicKey, privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const jwk = { ...publicKey.export({ format: 'jwk' }), kid: 'integration', use: 'sig', alg: 'RS256' };
 const codes = new Map();
-const user = { sub: 'integration-user', email: 'agent@test.example', email_verified: true, preferred_username: 'agent' };
+const user = { sub: 'integration-user', email: 'agent@test.example', email_verified: true, preferred_username: 'agent', groups: ['agentmemory-users'] };
 function jwt(nonce, claims = {}) {
   const now = Math.floor(Date.now() / 1000);
   const encode = (value) => Buffer.from(JSON.stringify(value)).toString('base64url');
@@ -34,7 +34,8 @@ createServer(async (req, res) => {
   if (url.pathname === '/authorize') {
     if (url.searchParams.get('client_id') !== clientId || url.searchParams.get('code_challenge_method') !== 'S256') return json(400, { error: 'invalid_request' });
     const code = randomBytes(24).toString('hex');
-    codes.set(code, { nonce: url.searchParams.get('nonce'), challenge: url.searchParams.get('code_challenge') });
+    codes.set(code, { nonce: url.searchParams.get('nonce'), challenge: url.searchParams.get('code_challenge'),
+      groups: url.searchParams.get('test_no_groups') === 'true' ? [] : user.groups });
     const target = new URL(url.searchParams.get('redirect_uri'));
     target.searchParams.set('code', code);
     target.searchParams.set('state', url.searchParams.get('state'));
@@ -50,7 +51,7 @@ createServer(async (req, res) => {
     codes.delete(values.get('code'));
     const challenge = createHash('sha256').update(values.get('code_verifier') || '').digest('base64url');
     if (!record || challenge !== record.challenge) return json(400, { error: 'invalid_grant' });
-    return json(200, { access_token: randomBytes(24).toString('hex'), token_type: 'Bearer', expires_in: 300, id_token: jwt(record.nonce) });
+    return json(200, { access_token: randomBytes(24).toString('hex'), token_type: 'Bearer', expires_in: 300, id_token: jwt(record.nonce, { groups: record.groups }) });
   }
   return json(404, { error: 'not_found' });
 }).listen(8080, '0.0.0.0');

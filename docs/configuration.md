@@ -44,19 +44,31 @@ The container supplies these fixed Kubernetes runtime settings:
 | `STANDALONE_PERSIST_PATH` | `/data/local.db` |
 | `III_ENGINE_URL` | `ws://127.0.0.1:49134` |
 | `AGENTMEMORY_URL` | `http://127.0.0.1:3111` |
-| `III_REST_PORT`, `III_STREAM_PORT`, `III_VIEWER_PORT` | `3111`, `3112`, `3113` |
+| `III_REST_PORT`, `III_STREAM_PORT`, `III_VIEWER_PORT` | `3111`, `engine.streamPort` (default `443`), `3113` |
 | `III_TELEMETRY_ENABLED` | `false` |
 
-Do not override these ports/paths individually: the iii ConfigMap, probes,
-Service and volume mounts must agree. REST uses internal port 3111; optional SSO
-also exposes proxy port 4180. `service.port` can change the primary ClusterIP's
+The chart binds the iii stream listener to port 443 by default, matching the
+public HTTPS port used by the UI's WebSocket connection. Set `engine.streamPort`
+to change the listener; the chart passes it as `III_STREAM_PORT` to the app and
+engine. Keep the default 443 for standard HTTPS Ingress and Gateway API
+listeners. With UI SSO, OAuth2 Proxy authenticates HTTP and WebSocket requests
+before forwarding to stock Caddy on localhost:4181. Caddy routes HTTP to the
+viewer and root WebSocket upgrades to the engine. Standard Ingress and Gateway
+API routes forward to the UI Service on port 4180; see [UI SSO](oauth2-proxy.md).
+Caddy's listener stays on localhost:4181 independently of `engine.streamPort`;
+only its stream destination follows that value. Both listeners share the pod's
+network and must use different ports.
+REST uses
+internal port 3111; optional SSO adds OAuth2 Proxy on port 4180 and private Caddy
+on localhost:4181. `caddy.image` and `caddy.resources` configure the external
+sidecar image and resources. `service.port` can change the primary ClusterIP's
 public port (default 3111); its numeric target remains 3111, or 4180 with API OIDC.
 Numeric targets support the engine's restartable init container on Kubernetes
-1.30–1.32. The headless Service advertises the actual listener port, 3111 or 4180,
-because its DNS records return Pod IPs without port translation. Worker
-and stream listeners bind loopback; the separate viewer and engine metrics
+1.30–1.32. The headless Service advertises the actual REST/proxy listener port,
+3111 or 4180, because its DNS records return Pod IPs without port translation.
+Worker and stream listeners bind loopback; the separate viewer and engine metrics
 ports are not published. Use the optional [UI SSO route](oauth2-proxy.md), or
-port-forward Pod port 3113 to localhost for trusted local inspection.
+port-forward Pod ports 3113 and 443 to localhost for trusted local inspection.
 The application has no Kubernetes API token or RBAC permissions.
 
 `env` accepts non-secret upstream environment variables. `extraEnv` supports

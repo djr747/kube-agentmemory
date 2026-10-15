@@ -23,6 +23,9 @@ spec:
       annotations:
         checksum/engine: {{ include (print $.Template.BasePath "/engine-config.yaml") . | sha256sum }}
         checksum/config: {{ toJson .Values.env | sha256sum }}
+        {{- if .Values.oauth2Proxy.enabled }}
+        checksum/caddy: {{ include (print $.Template.BasePath "/caddy-config.yaml") . | sha256sum }}
+        {{- end }}
         {{- with .Values.podAnnotations }}
         {{- toYaml . | nindent 8 }}
         {{- end }}
@@ -86,12 +89,18 @@ spec:
                 seconds: {{ .Values.engine.shutdownDelaySeconds }}
           env:
             - {name: III_TELEMETRY_ENABLED, value: "false"}
+            - {name: III_STREAM_PORT, value: {{ .Values.engine.streamPort | quote }}}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
-            capabilities: {drop: [ALL]}
+            capabilities:
+              drop: [ALL]
+              {{ if lt (int $.Values.engine.streamPort) 1024 }}
+              add: [NET_BIND_SERVICE]
+              {{ end }}
           ports:
             - {name: http, containerPort: 3111}
+            - {name: stream, containerPort: {{ .Values.engine.streamPort }}}
           startupProbe:
             tcpSocket: {port: 3111}
             periodSeconds: 5
@@ -119,6 +128,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           env:
+            - {name: III_STREAM_PORT, value: {{ .Values.engine.streamPort | quote }}}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
@@ -175,7 +185,7 @@ spec:
             - {{ printf "--scope=%s" .Values.oauth2Proxy.scope | quote }}
             - {{ printf "--oidc-email-claim=%s" .Values.oauth2Proxy.emailClaim | quote }}
             - --http-address=0.0.0.0:4180
-            - --upstream=http://127.0.0.1:3113
+            - --upstream=http://127.0.0.1:4181/
             - --pass-host-header=false
             - --reverse-proxy=true
             - --cookie-name=__Host-agentmemory
@@ -190,6 +200,7 @@ spec:
             - --pass-authorization-header=false
             - --request-logging=false
             - --api-route=^/agentmemory(/|$)
+            - --proxy-websockets=true
             - {{ printf "--oidc-issuer-url=%s" .Values.oauth2Proxy.issuerUrl | quote }}
             - {{ printf "--client-id=%s" .Values.oauth2Proxy.clientId | quote }}
             - {{ printf "--redirect-url=%s" .Values.oauth2Proxy.redirectUrl | quote }}
@@ -241,6 +252,38 @@ spec:
           volumeMounts:
             {{- toYaml . | nindent 12 }}
           {{- end }}
+        - name: caddy
+          image: {{ include "agentmemory.image" (dict "repository" .Values.caddy.image.repository "tag" .Values.caddy.image.tag "digest" .Values.caddy.image.digest) | quote }}
+          imagePullPolicy: {{ .Values.caddy.image.pullPolicy }}
+          command: [caddy]
+          args: [run, --config, /etc/caddy/Caddyfile, --adapter, caddyfile]
+          env:
+            - {name: HOME, value: /tmp}
+            - {name: XDG_DATA_HOME, value: /tmp/caddy/data}
+            - {name: XDG_CONFIG_HOME, value: /tmp/caddy/config}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            # Required to execute the official image's file-capability binary.
+            capabilities: {drop: [ALL], add: [NET_BIND_SERVICE]}
+          startupProbe:
+            exec:
+              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4181/healthz]
+            periodSeconds: 2
+            failureThreshold: 30
+          readinessProbe:
+            exec:
+              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4181/healthz]
+            periodSeconds: 5
+          livenessProbe:
+            exec:
+              command: [/bin/busybox, wget, -q, -O, /dev/null, http://127.0.0.1:4181/healthz]
+            periodSeconds: 20
+          resources:
+            {{- toYaml .Values.caddy.resources | nindent 12 }}
+          volumeMounts:
+            - {name: caddy-config, mountPath: /etc/caddy, readOnly: true}
+            - {name: caddy-tmp, mountPath: /tmp}
         {{- end }}
       volumes:
         - name: engine-config
@@ -249,6 +292,12 @@ spec:
         - {name: engine-work, emptyDir: {sizeLimit: 64Mi}}
         - {name: engine-tmp, emptyDir: {sizeLimit: 64Mi}}
         - {name: app-tmp, emptyDir: {sizeLimit: 256Mi}}
+        {{- if .Values.oauth2Proxy.enabled }}
+        - name: caddy-config
+          configMap:
+            name: {{ include "agentmemory.fullname" . }}-caddy
+        - {name: caddy-tmp, emptyDir: {sizeLimit: 32Mi}}
+        {{- end }}
         {{- if .Values.persistence.existingClaim }}
         - name: data
           persistentVolumeClaim:
@@ -280,7 +329,9 @@ spec:
       {{- end }}
   {{- if not .Values.persistence.existingClaim }}
   volumeClaimTemplates:
-    - metadata:
+    - apiVersion: v1
+      kind: PersistentVolumeClaim
+      metadata:
         name: data
       spec:
         accessModes:

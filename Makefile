@@ -11,6 +11,8 @@ check:
 	node --check tests/sync-release.mjs
 	node --check tests/registry-digest.mjs
 	node --check tests/publish-release.mjs
+	node --check tests/external-image.mjs
+	node --check tests/caddy-config.mjs
 test: check
 	npm test
 audit:

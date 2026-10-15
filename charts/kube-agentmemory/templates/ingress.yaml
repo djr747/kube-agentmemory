@@ -50,7 +50,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: {{ include "agentmemory.fullname" . }}-auth
+                name: {{ include "agentmemory.fullname" . }}-ui
                 port: {number: 4180}
 {{- end }}
 {{- end }}

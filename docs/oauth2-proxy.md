@@ -6,7 +6,7 @@ explicit opt-in; see below.
 
 | Client | Example endpoint | Authentication |
 | --- | --- | --- |
-| Agent integrations / stdio MCP shim | `https://memory.example.com` | Existing `AGENTMEMORY_SECRET` bearer |
+| Agent integrations / stdio MCP shim (`AGENTMEMORY_URL`) | `https://memory.example.com` | Existing `AGENTMEMORY_SECRET` bearer |
 | Browser UI | `https://memory-ui.example.com` | Your OIDC identity provider and a secure session cookie |
 
 The published `quay.io/oauth2-proxy/oauth2-proxy:v7.15.5` image is an external
@@ -49,24 +49,89 @@ helm upgrade --install memory ./charts/kube-agentmemory \
 Use your built/published app and engine image settings as described in the
 README. The chart creates an additional UI Ingress; the original API Ingress
 continues forwarding `/agentmemory` to REST port 3111. The UI Ingress forwards
-`/`, `/oauth2/*`, and same-origin browser API calls to proxy port 4180. Traefik
-must terminate TLS and supply trusted forwarding headers. OAuth2 Proxy uses
+`/`, `/oauth2/*`, same-origin browser API calls and WebSocket upgrades to OAuth2
+Proxy on port 4180. After authenticating the request, OAuth2 Proxy forwards it
+to stock Caddy on localhost:4181. Caddy sends HTTP to the viewer on localhost:3113
+and root WebSocket upgrades to the engine listener. The ingress controller must
+terminate TLS and forward cookies,
+the browser's `Origin` header and WebSocket upgrades. OAuth2 Proxy uses
 Secure, HttpOnly, SameSite=Lax cookies, nonce verification and PKCE. HTTP access
 does not provide a working login session because cookies require HTTPS.
+
+Both Ingress resources accept external HTTPS on port 443. The API hostname maps
+to the API Service's internal port 3111; the UI hostname maps to OAuth2 Proxy's
+internal port 4180. Agents use the API hostname without a port suffix, while
+people open the UI hostname in a browser. With Gateway API, the API and UI
+HTTPRoutes use the existing TLS listener (normally 443) and preserve this same
+separation of host and backend.
 
 For Gateway API, overlay `examples/traefik-gateway.yaml` instead. The chart
 creates separate API and UI HTTPRoutes. The parent HTTPS listener must accept
 **both** hostnames and its certificate must cover both; an API-only hostname on
 the listener will reject the UI route. Keep routing to the two backends separate.
 
-The sidecar forwards to the viewer on loopback port 3113. That local viewer
-authenticates upstream REST requests using the private memory secret. Neither
-the viewer port nor worker/stream ports receive a Kubernetes Service. Browser
-users log in with the identity provider and do not need the backend bearer
-secret. Outside this SSO route, the upstream viewer's Unlock prompt uses
+The viewer reads the stream listener port from the live status endpoint. The
+chart sets that in-pod port to `443` by default and supplies it as
+`III_STREAM_PORT` to the app and engine, and renders that backend port in the
+Caddyfile. For standard HTTPS Ingress and Gateway API listeners, keep the default
+`443`. OAuth2 Proxy authenticates every forwarded HTTP/WebSocket request. Caddy
+distinguishes root WebSocket upgrades from HTTP using built-in request matchers.
+This uses standard Ingress and Gateway API backends without controller-specific
+CRDs, plugins or custom proxy code. Neither the viewer nor stream port receives
+an external address directly. The bearer API goes directly to AgentMemory,
+which validates `Authorization: Bearer <AGENTMEMORY_SECRET>`; Caddy is not in
+that request path.
+
+Caddy's WebSocket Origin check uses `https://<oauth2Proxy.uiHost>` from chart
+configuration, independent of incoming `Host` or `X-Forwarded-*` headers. It strips
+cookies and Authorization before forwarding to either local backend and sets
+the public upstream host/scheme explicitly. OAuth2 Proxy's callback URL is also
+explicitly configured. The ingress must sanitize forwarding headers from clients
+and supply its normal trusted HTTPS forwarding headers to OAuth2 Proxy.
+
+The chart uses the official `docker.io/library/caddy:2.11.7-alpine` image with
+standard modules only. Set `caddy.image` to change its repository, tag or digest.
+Caddy binds localhost on an unprivileged port and runs nonroot with a read-only
+root filesystem and no credential mounts. It drops all capabilities and adds
+only `NET_BIND_SERVICE`, required to execute the official image's binary because
+that binary carries a file capability. Its
+administration API, configuration persistence and automatic HTTPS are disabled;
+the ingress owns TLS. Only a bounded temporary volume is writable. Caddy and
+OAuth2 Proxy are external images covered by integration tests. CI and
+`make security` scan only the application and engine images built here.
+See [Caddy's WebSocket routing example](https://caddyserver.com/docs/caddyfile/matchers#named-matchers).
+
+Ingress and gateway replicas need no session affinity. OAuth2 Proxy uses its
+default cookie session store: the signed, encrypted session travels with each
+browser request and OAuth2 Proxy validates it before forwarding to Caddy. Caddy
+holds no login sessions. An open WebSocket stays on its
+existing connection; a disconnect requires a fresh authenticated connection and
+can use a different ingress replica. AgentMemory itself remains a single writer;
+this does not add support for multiple AgentMemory replicas. See
+[OAuth2 Proxy session storage](https://oauth2-proxy.github.io/oauth2-proxy/configuration/session_storage/).
+
+Browser users log in with the identity provider and do not need the backend
+bearer secret. Outside this SSO route, the upstream viewer's Unlock prompt uses
 `AGENTMEMORY_SECRET`; there is no default username/admin password. For trusted
-local inspection, port-forward Pod port 3113 to localhost; the loopback viewer
-already has the server token and does not prompt for it.
+local inspection, port-forward Pod ports 3113 and 443 to localhost; the loopback
+viewer already has the server token and does not prompt for it.
+
+These URLs serve different clients. Give agents the API hostname root as
+`AGENTMEMORY_URL` (for example, `https://memory.example.com`) and keep the
+existing bearer secret in `AGENTMEMORY_SECRET`. The API's HTTP routes are under
+`/agentmemory`, but the standard client adds that path itself. The browser's
+WebSocket uses the UI hostname and root path. OAuth2 Proxy authenticates it with
+the browser's OAuth session and Caddy forwards it internally to the engine;
+this is not the agent API URL.
+
+The upstream viewer currently builds its suggested agent URL using the internal
+REST listener port. Behind Ingress/Gateway this can display an address such as
+`https://memory-ui.example.com:3111`, which is not externally routed and uses the
+wrong hostname for agents. Do not copy that suggestion for a standard agent
+client; configure `AGENTMEMORY_URL` with the API hostname shown above. Direct
+API requests use `https://memory.example.com/agentmemory/...` and the existing
+bearer token. The UI's WebSocket remains on the UI hostname and is routed
+separately by the chart.
 
 ## Vault or mounted files
 
@@ -149,7 +214,8 @@ the memory chart and is not built/published by this project. See
 `oauth2Proxy.protectApi` defaults to **false**. To protect the API as well,
 overlay `examples/oauth2-api.yaml` on your provider settings. This also enables
 verified JWT bearer support. API and headless Services then send requests to the
-proxy, and the NetworkPolicy removes inbound port 3111 while allowing 4180.
+proxy, and the NetworkPolicy removes inbound port 3111 while allowing port 4180.
+Caddy remains on localhost:4181 and is not exposed through a Service.
 The primary ClusterIP retains `service.port` and targets numeric port 4180;
 the headless Service publishes port 4180 directly, regardless of `service.port`.
 Ingress and Gateway API both retain the `/agentmemory` path through those
