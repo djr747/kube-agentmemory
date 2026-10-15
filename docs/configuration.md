@@ -50,9 +50,11 @@ The container supplies these fixed Kubernetes runtime settings:
 The chart binds the iii stream listener to port 443 by default, matching the
 public HTTPS port used by the UI's WebSocket connection. Set `engine.streamPort`
 to change the listener; the chart passes it as `III_STREAM_PORT` to the app and
-engine. Keep the default 443 for standard HTTPS Ingress and Gateway API
-listeners. With UI SSO, OAuth2 Proxy authenticates HTTP and WebSocket requests
-before forwarding to stock Caddy on localhost:4181. Caddy routes HTTP to the
+engine. The chart rejects `III_STREAM_PORT` assignments in both `env` and
+`extraEnv`, including `valueFrom` references; use `engine.streamPort` so the app,
+engine and Caddy share one setting. Keep the default 443 for standard HTTPS
+Ingress and Gateway API listeners. With UI SSO, OAuth2 Proxy authenticates HTTP
+and WebSocket requests before forwarding to stock Caddy on localhost:4181. Caddy routes HTTP to the
 viewer and root WebSocket upgrades to the engine. Standard Ingress and Gateway
 API routes forward to the UI Service on port 4180; see [UI SSO](oauth2-proxy.md).
 Caddy's listener stays on localhost:4181 independently of `engine.streamPort`;

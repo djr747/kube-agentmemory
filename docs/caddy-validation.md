@@ -8,14 +8,16 @@ only the application and engine images built by this repository.
 - Locked installation, unit/chart tests, strict Helm lint, both npm audits,
   app/engine builds, release metadata checks and 0.1.2 chart packaging.
   Final local checks used Node 22.23.3 and the repository's verified npm 12.2.0.
-- All 42 unit/chart tests pass, including reserved stream-port rejection in
+- All 44 unit/chart tests pass, including reserved stream-port rejection in
   bearer, UI SSO and API OIDC modes, and acceptance of unused SSO ports when
-  those sidecars are disabled.
+  those sidecars are disabled. Literal and referenced `extraEnv` stream-port
+  overrides are rejected in all auth modes; unrelated environment entries remain
+  supported and the generated app/engine/Caddy settings stay synchronized.
 - The official Caddy parser verifies the loopback listener stays on 4181,
   health and Origin checks execute before proxying, and the stream destination
   follows `engine.streamPort` at both 443 and 3212.
 - Full packaged-chart integration (`make integration`, exit 0) in disposable
-  cluster `agentmemory-integration-15498`, followed by successful cluster removal.
+  cluster `agentmemory-integration-28583`, followed by successful cluster removal.
 - Local embeddings, memory search, pod-replacement and reinstall persistence,
   retained PVCs, and environment/file credentials.
 - Through the UI Service from a separate pod: PKCE login, group rejection,

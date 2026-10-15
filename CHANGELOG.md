@@ -8,6 +8,7 @@
 - Bind the iii stream listener to port 443 by default so the viewer WebSocket uses the UI HTTPS ingress or Gateway API route.
 - Make the stream listener port configurable through `engine.streamPort` / `III_STREAM_PORT`, including the restricted bind capability for ports below 1024.
 - Reject stream ports that collide with fixed pod listeners, including OAuth2 Proxy and Caddy while UI SSO is enabled.
+- Reject `III_STREAM_PORT` overrides through both `env` and `extraEnv`, including references, to keep the app, engine and Caddy on the same stream port.
 - Route UI HTTP/WebSocket requests through OAuth2 Proxy and a private stock Caddy sidecar, using standard Ingress/Gateway API backends without upstream patches or custom proxy code.
 - Validate WebSocket origins against chart configuration, strip backend credentials and preserve bearer API access on its separate route; no ingress session affinity is required.
 - Cover authenticated UI/WebSocket access through the UI Service in integration tests; image scanning remains limited to the application and engine images built by this project.

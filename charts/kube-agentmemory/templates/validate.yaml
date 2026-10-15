@@ -17,6 +17,9 @@
 {{- if or (eq $streamPort 3111) (eq $streamPort 3113) (eq $streamPort 49134) -}}{{- fail "engine.streamPort conflicts with a reserved pod listener (3111 REST, 3113 viewer, 49134 worker manager)" -}}{{- end -}}
 {{- if and .Values.oauth2Proxy.enabled (or (eq $streamPort 4180) (eq $streamPort 4181)) -}}{{- fail "engine.streamPort conflicts with a UI SSO listener (4180 OAuth2 Proxy, 4181 Caddy) while oauth2Proxy.enabled=true" -}}{{- end -}}
 {{- if hasKey .Values.env "III_STREAM_PORT" -}}{{- fail "Set engine.streamPort instead of env.III_STREAM_PORT" -}}{{- end -}}
+{{- range .Values.extraEnv -}}
+{{- if eq .name "III_STREAM_PORT" -}}{{- fail "Set engine.streamPort instead of extraEnv III_STREAM_PORT" -}}{{- end -}}
+{{- end -}}
 {{- if and .Values.secrets.existingSecret (hasKey .Values.secretFiles "AGENTMEMORY_SECRET") -}}{{- fail "Choose one AGENTMEMORY_SECRET source" -}}{{- end -}}
 {{- $saveMs := index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" | int -}}
 {{- if le (mul .Values.engine.shutdownDelaySeconds 1000) $saveMs -}}{{- fail "engine.shutdownDelaySeconds must exceed the state-save interval" -}}{{- end -}}

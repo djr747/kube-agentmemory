@@ -54,7 +54,7 @@ env:
   AGENTMEMORY_ALLOW_AGENT_SDK: "false"
   AGENTMEMORY_STATE_SAVE_INTERVAL_MS: "2000"
   AGENTMEMORY_INDEX_SAVE_INTERVAL_MS: "2000"
-# Arbitrary upstream variables, Secret refs and file paths are supported here.
+# Upstream variables, Secret refs and file paths; use engine.streamPort for III_STREAM_PORT.
 extraEnv: []
 envFrom: []
 extraVolumes: []

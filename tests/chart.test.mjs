@@ -86,6 +86,44 @@ test('API OIDC is opt-in, removes direct ingress and changes both Service target
   assert.equal(engine.securityContext.capabilities.add, undefined);
   assert.match(custom.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-engine').data['config.yaml'], /port: \$\{III_STREAM_PORT:3112\}/);
 });
+test('stream port overrides in env and extraEnv are rejected in every auth mode', () => {
+  const sources = [
+    { value: '3212' },
+    { value: '443' },
+    { valueFrom: { secretKeyRef: { name: 'runtime-secret', key: 'port' } } },
+    { valueFrom: { configMapKeyRef: { name: 'runtime-config', key: 'port' } } },
+    { valueFrom: { fieldRef: { fieldPath: 'metadata.annotations["stream-port"]' } } },
+  ];
+  for (const mode of [[], ['-f', 'examples/oauth2-proxy.yaml'],
+    ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+    assert.match(render([...auth, ...mode, '--set-string', 'env.III_STREAM_PORT=3212'], false),
+      /Set engine\.streamPort instead of env\.III_STREAM_PORT/);
+    for (const source of sources) {
+      const extraEnv = [{ name: 'EXTRA_SETTING', value: 'kept' }, { name: 'III_STREAM_PORT', ...source }];
+      assert.match(render([...auth, ...mode, '--set-json', `extraEnv=${JSON.stringify(extraEnv)}`], false),
+        /Set engine\.streamPort instead of extraEnv III_STREAM_PORT/);
+    }
+  }
+});
+test('unrelated extraEnv and envFrom preserve the chart-managed stream port', () => {
+  const extraEnv = [{ name: 'EXTRA_SETTING', value: 'kept' },
+    { name: 'OTHER_SETTING', valueFrom: { configMapKeyRef: { name: 'runtime-config', key: 'setting' } } }];
+  const envFrom = [{ configMapRef: { name: 'runtime-config' } }];
+  for (const port of [443, 3212]) {
+    const docs = render([...auth, '-f', 'examples/oauth2-proxy.yaml', '--set', `engine.streamPort=${port}`,
+      '--set-json', `extraEnv=${JSON.stringify(extraEnv)}`, '--set-json', `envFrom=${JSON.stringify(envFrom)}`]);
+    const pod = docs.find((m) => m.kind === 'StatefulSet').spec.template.spec;
+    const app = pod.containers.find((c) => c.name === 'app');
+    for (const container of [app, pod.initContainers[0]]) {
+      assert.deepEqual(container.env.filter((e) => e.name === 'III_STREAM_PORT'),
+        [{ name: 'III_STREAM_PORT', value: String(port) }]);
+    }
+    assert.deepEqual(app.env.slice(-extraEnv.length), extraEnv);
+    assert.deepEqual(app.envFrom, envFrom);
+    assert.ok(docs.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-caddy')
+      .data.Caddyfile.includes(`reverse_proxy 127.0.0.1:${port}`));
+  }
+});
 test('stream ports cannot collide with REST, viewer or worker listeners in any auth mode', () => {
   for (const mode of [[], ['-f', 'examples/oauth2-proxy.yaml'],
     ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
