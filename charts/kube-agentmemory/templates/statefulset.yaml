@@ -28,6 +28,7 @@ spec:
         {{- end }}
         {{- if .Values.vault.enabled }}
         vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/preserve-secret-case: "true"
         vault.hashicorp.com/role: {{ .Values.vault.role | quote }}
         vault.hashicorp.com/agent-inject-containers: {{ if .Values.oauth2Proxy.enabled }}app,oauth2-proxy{{ else }}app{{ end }}
         vault.hashicorp.com/agent-run-as-user: "65532"

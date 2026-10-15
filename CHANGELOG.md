@@ -1,5 +1,9 @@
 # Changelog
 
+## [0.1.2] - 2026-10-14
+
+- Preserve Vault secret filename case so file-backed credentials match their configured paths.
+
 ## [0.1.1] - 2026-10-14
 
 - Update checkout to 7.0.1, setup-node to 7.1.0, upload-artifact to 7.0.2,

@@ -110,6 +110,7 @@ test('Vault uses raw files and a token volume isolated from application containe
   const manifests = render(['-f', 'examples/vault.yaml']);
   const pod = manifests.find((m) => m.kind === 'StatefulSet').spec.template;
   assert.match(pod.metadata.annotations['vault.hashicorp.com/agent-inject-template-AGENTMEMORY_SECRET'], /\{\{- with secret/);
+  assert.equal(pod.metadata.annotations['vault.hashicorp.com/preserve-secret-case'], 'true');
   assert.equal(pod.metadata.annotations['vault.hashicorp.com/agent-inject-containers'], 'app');
   assert.equal(pod.spec.automountServiceAccountToken, false);
   assert.equal(pod.spec.volumes.find((v) => v.name === 'vault-token').projected.sources[0].serviceAccountToken.audience, 'vault');
