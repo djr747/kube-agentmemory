@@ -10,6 +10,7 @@ image:
 imagePullSecrets: []
 engine:
   shutdownDelaySeconds: 5 # Allow the last periodic state-store flush after app shutdown
+  # Reserved: 3111, 3113, 49134; also 4180 and 4181 when oauth2Proxy.enabled=true.
   streamPort: 443 # Viewer dials the same HTTPS port; Caddy forwards authenticated root WebSocket upgrades here
   image:
     repository: ghcr.io/djr747/kube-agentmemory-engine

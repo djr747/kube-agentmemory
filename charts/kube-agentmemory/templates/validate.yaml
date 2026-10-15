@@ -12,7 +12,10 @@
 {{- if and .Values.ingress.enabled (not .Values.ingress.tlsSecretName) -}}{{- fail "ingress.tlsSecretName is required" -}}{{- end -}}
 {{- if and .Values.gateway.enabled (not .Values.gateway.parentRefs) -}}{{- fail "gateway.parentRefs is required" -}}{{- end -}}
 {{- if and (not .Values.serviceAccount.create) (not .Values.serviceAccount.name) -}}{{- fail "serviceAccount.name is required when create is false" -}}{{- end -}}
-{{- if or (lt (int .Values.engine.streamPort) 1) (gt (int .Values.engine.streamPort) 65535) -}}{{- fail "engine.streamPort must be between 1 and 65535" -}}{{- end -}}
+{{- $streamPort := int .Values.engine.streamPort -}}
+{{- if or (lt $streamPort 1) (gt $streamPort 65535) -}}{{- fail "engine.streamPort must be between 1 and 65535" -}}{{- end -}}
+{{- if or (eq $streamPort 3111) (eq $streamPort 3113) (eq $streamPort 49134) -}}{{- fail "engine.streamPort conflicts with a reserved pod listener (3111 REST, 3113 viewer, 49134 worker manager)" -}}{{- end -}}
+{{- if and .Values.oauth2Proxy.enabled (or (eq $streamPort 4180) (eq $streamPort 4181)) -}}{{- fail "engine.streamPort conflicts with a UI SSO listener (4180 OAuth2 Proxy, 4181 Caddy) while oauth2Proxy.enabled=true" -}}{{- end -}}
 {{- if hasKey .Values.env "III_STREAM_PORT" -}}{{- fail "Set engine.streamPort instead of env.III_STREAM_PORT" -}}{{- end -}}
 {{- if and .Values.secrets.existingSecret (hasKey .Values.secretFiles "AGENTMEMORY_SECRET") -}}{{- fail "Choose one AGENTMEMORY_SECRET source" -}}{{- end -}}
 {{- $saveMs := index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" | int -}}

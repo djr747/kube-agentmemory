@@ -86,6 +86,28 @@ test('API OIDC is opt-in, removes direct ingress and changes both Service target
   assert.equal(engine.securityContext.capabilities.add, undefined);
   assert.match(custom.find((m) => m.kind === 'ConfigMap' && m.metadata.name === 'memory-engine').data['config.yaml'], /port: \$\{III_STREAM_PORT:3112\}/);
 });
+test('stream ports cannot collide with REST, viewer or worker listeners in any auth mode', () => {
+  for (const mode of [[], ['-f', 'examples/oauth2-proxy.yaml'],
+    ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+    for (const port of [3111, 3113, 49134]) {
+      assert.match(render([...auth, ...mode, '--set', `engine.streamPort=${port}`], false),
+        /engine\.streamPort conflicts with a reserved pod listener/);
+    }
+  }
+});
+test('SSO listener ports are reserved only while the proxy sidecars are enabled', () => {
+  for (const port of [4180, 4181]) {
+    for (const mode of [['-f', 'examples/oauth2-proxy.yaml'],
+      ['-f', 'examples/oauth2-proxy.yaml', '-f', 'examples/oauth2-api.yaml']]) {
+      assert.match(render([...auth, ...mode, '--set', `engine.streamPort=${port}`], false),
+        /engine\.streamPort conflicts with a UI SSO listener/);
+    }
+    const sts = render([...auth, '--set', `engine.streamPort=${port}`]).find((m) => m.kind === 'StatefulSet');
+    assert.equal(sts.spec.template.spec.initContainers[0].ports.find((p) => p.name === 'stream').containerPort, port);
+  }
+  for (const port of [1, 65535]) render([...auth, '--set', `engine.streamPort=${port}`]);
+  for (const port of [0, 65536]) assert.match(render([...auth, '--set', `engine.streamPort=${port}`], false), /streamPort/);
+});
 test('custom ClusterIP ports retain numeric targets and headless ports match the listener', () => {
   const modes = [
     { args: [], listener: 3111 },

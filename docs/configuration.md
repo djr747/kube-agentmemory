@@ -57,7 +57,11 @@ viewer and root WebSocket upgrades to the engine. Standard Ingress and Gateway
 API routes forward to the UI Service on port 4180; see [UI SSO](oauth2-proxy.md).
 Caddy's listener stays on localhost:4181 independently of `engine.streamPort`;
 only its stream destination follows that value. Both listeners share the pod's
-network and must use different ports.
+network and must use different ports. The chart rejects stream ports 3111 (REST),
+3113 (viewer), and 49134 (worker manager). When `oauth2Proxy.enabled=true`, it also
+rejects 4180 (OAuth2 Proxy) and 4181 (Caddy). Those two ports remain available for
+the stream listener when UI SSO is disabled. `service.port` only changes Service
+port translation and does not reserve an additional in-pod listener.
 REST uses
 internal port 3111; optional SSO adds OAuth2 Proxy on port 4180 and private Caddy
 on localhost:4181. `caddy.image` and `caddy.resources` configure the external
