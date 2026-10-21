@@ -1,5 +1,5 @@
 # Preserve the upstream-supported wire version while refreshing its OS libraries.
-FROM iiidev/iii:0.22.1 AS upstream
+FROM iiidev/iii:0.24.5 AS upstream
 FROM gcr.io/distroless/cc-debian13:nonroot
 COPY --from=upstream /app/iii /app/iii
 COPY --from=upstream --chown=65532:65532 /app/data /app/data
