@@ -19,8 +19,8 @@
     "yaml": "2.9.1"
   },
   "dependencies": {
-    "@agentmemory/agentmemory": "0.9.30",
-    "dotenv": "18.0.8"
+    "@agentmemory/agentmemory": "0.9.31",
+    "dotenv": "18.0.9"
   },
   "allowScripts": {
     "onnxruntime-node@1.30.0": true,
