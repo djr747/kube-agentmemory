@@ -24,7 +24,7 @@ Run `make package` to generate the release chart from `package.json`.
 ```sh
 make install
 make test chart audit
-make build
+make build patch-images integration-baseline
 make integration
 ```
 
@@ -88,7 +88,7 @@ Overlay **one** of `examples/traefik-ingress.yaml` or
 Traefik examples; the chart's UI routing uses a standard Service backend and
 does not require Traefik CRDs. For another controller, route the UI hostname to
 the chart's `-ui` Service on port 4180 and forward cookies, the browser's
-`Origin` header and WebSocket upgrades. Change the host, certificate Secret,
+`Origin` header and streaming HTTP responses. Change the host, certificate Secret,
 controller namespace and pod labels to match your cluster.
 Both routes preserve `/agentmemory`; do not strip that prefix or log the
 Authorization header.
@@ -120,7 +120,7 @@ standard agent integrations continue working. Set `oauth2Proxy.protectApi=true`
 only when agents can provide verified OIDC JWTs. Provider examples cover
 [Entra and local Keycloak](docs/oauth2-proxy.md). OAuth secrets support environment
 references, mounted files and Vault injection. UI SSO also adds the stock Caddy
-image for HTTP/WebSocket routing. Both external images are integration tested;
+image for HTTP and live event routing. Both external images are integration tested;
 neither is built or scanned by this project.
 
 With UI SSO, agents use the **API hostname**, for example
@@ -132,8 +132,8 @@ is not a valid Ingress/Gateway endpoint. Do not copy it for an agent. The API
 and UI each use public HTTPS port 443 through separate Ingress resources (or
 separate Gateway routes): the API route forwards to internal REST port 3111, and
 the UI route forwards to OAuth2 Proxy on internal port 4180. After authentication,
-it forwards to Caddy on localhost:4181, which sends HTTP to the viewer and root
-WebSocket upgrades to the engine listener. The bearer API bypasses both proxies.
+it forwards to Caddy on localhost:4181, which sends HTTP and live events to the
+viewer. The bearer API bypasses both proxies.
 No AgentMemory source patches or custom proxy code are required. See the
 [endpoint and SSO details](docs/oauth2-proxy.md).
 
@@ -145,13 +145,11 @@ engine and proxy CPU/memory independently using the documented
 ## CI and security
 
 CI validates the dependency lock, release metadata, unit/chart tests and examples.
-It audits npm dependencies and scans only the app and engine images built by
-this project with Anchore Grype,
-creates an SBOM, and runs the packaged-chart integration on native amd64 and
-arm64 runners. High/critical findings with published fixes block the build; all
-findings are retained in reports and unfixed high/critical findings remain visible
-in the CI summary. No Aqua tools are used.
-Only successful push CI on `main` publishes the exact tested images and OCI chart,
+It audits npm dependencies, applies available Debian package updates to the
+Distroless images with Copa, and scans both architectures with Anchore Grype.
+Every High or Critical image finding blocks publication, including findings
+without a published fix. CI runs the packaged chart integration once on amd64.
+Only successful push CI on `main` publishes the validated images and OCI chart,
 then creates the version tag/GitHub Release. `develop` is the staging branch for
 reviewed PRs into `main`; it never publishes. Images include project/upstream
 version tags and `latest`. See [release structure and tags](docs/release.md).

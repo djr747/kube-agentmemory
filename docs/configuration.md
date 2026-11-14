@@ -1,17 +1,15 @@
 # Runtime configuration
 
-This repository packages upstream agentmemory 0.9.30 with iii 0.22.1. The
+This repository packages upstream agentmemory 0.9.33 with iii 0.25.1. The
 application package and all transitive packages are locked in `package-lock.json`.
-`Dockerfile.engine` copies the unchanged iii 0.22.1 binary into Google's current
+`Dockerfile.engine` copies the unchanged iii 0.25.1 binary into Google's current
 Distroless C/C++ runtime to refresh its OS/OpenSSL libraries. Both app and engine
 images use this project's release version and are built, tested and published together.
 Google Distroless and iii images support amd64/arm64 and require no DHI credentials.
-The latest agentmemory release still pins `iii-sdk` 0.22.1. Its
-[versioned Compose configuration](https://github.com/rohitg00/agentmemory/blob/v0.9.30/docker-compose.yml)
-requires the matching engine: iii 0.23 removed the config.yaml worker lifecycle.
-An engine-only Dependabot upgrade must stay blocked until agentmemory supports
-the new lifecycle and its SDK/engine can be upgraded together. The telemetry
-helper security override below does not change the engine protocol version.
+The upstream [0.9.33 release](https://github.com/rohitg00/agentmemory/releases/tag/v0.9.33)
+pins both `iii-sdk` and `@iii-dev/helpers` to 0.25.1. Keep the npm packages and
+engine image matched to that pin; evaluate any engine-only change against the
+published upstream package and the packaged-chart integration suite.
 Build and runtime both use Google's Distroless Debian 13 image family. The
 Node builder uses `:debug`, which provides BusyBox. It downloads pinned npm CLI
 source and verifies SHA-512 integrity before extraction. Its vendor-bundled
@@ -44,26 +42,14 @@ The container supplies these fixed Kubernetes runtime settings:
 | `STANDALONE_PERSIST_PATH` | `/data/local.db` |
 | `III_ENGINE_URL` | `ws://127.0.0.1:49134` |
 | `AGENTMEMORY_URL` | `http://127.0.0.1:3111` |
-| `III_REST_PORT`, `III_STREAM_PORT`, `III_VIEWER_PORT` | `3111`, `engine.streamPort` (default `443`), `3113` |
+| `III_REST_PORT`, `III_VIEWER_PORT` | `3111`, `3113` |
 | `III_TELEMETRY_ENABLED` | `false` |
 
-The chart binds the iii stream listener to port 443 by default, matching the
-public HTTPS port used by the UI's WebSocket connection. Set `engine.streamPort`
-to change the listener; the chart passes it as `III_STREAM_PORT` to the app and
-engine. The chart rejects `III_STREAM_PORT` assignments in both `env` and
-`extraEnv`, including `valueFrom` references; use `engine.streamPort` so the app,
-engine and Caddy share one setting. Keep the default 443 for standard HTTPS
-Ingress and Gateway API listeners. With UI SSO, OAuth2 Proxy authenticates HTTP
-and WebSocket requests before forwarding to stock Caddy on localhost:4181. Caddy routes HTTP to the
-viewer and root WebSocket upgrades to the engine. Standard Ingress and Gateway
-API routes forward to the UI Service on port 4180; see [UI SSO](oauth2-proxy.md).
-Caddy's listener stays on localhost:4181 independently of `engine.streamPort`;
-only its stream destination follows that value. Both listeners share the pod's
-network and must use different ports. The chart rejects stream ports 3111 (REST),
-3113 (viewer), and 49134 (worker manager). When `oauth2Proxy.enabled=true`, it also
-rejects 4180 (OAuth2 Proxy) and 4181 (Caddy). Those two ports remain available for
-the stream listener when UI SSO is disabled. `service.port` only changes Service
-port translation and does not reserve an additional in-pod listener.
+The engine sidecar starts Worker Compose from its writable work volume with the
+default name `worker-compose.yaml`. The manifest pins the upstream HTTP and state
+workers. The state worker opens the existing `/data/state_store.db` on the PVC.
+Viewer updates use authenticated HTTP SSE at `/agentmemory/viewer/events`; the
+former `engine.streamPort` setting is ignored. Keep HTTPS 443 at the ingress.
 REST uses
 internal port 3111; optional SSO adds OAuth2 Proxy on port 4180 and private Caddy
 on localhost:4181. `caddy.image` and `caddy.resources` configure the external
@@ -72,9 +58,9 @@ public port (default 3111); its numeric target remains 3111, or 4180 with API OI
 Numeric targets support the engine's restartable init container on Kubernetes
 1.30–1.32. The headless Service advertises the actual REST/proxy listener port,
 3111 or 4180, because its DNS records return Pod IPs without port translation.
-Worker and stream listeners bind loopback; the separate viewer and engine metrics
+The worker manager binds loopback; the separate viewer and engine metrics
 ports are not published. Use the optional [UI SSO route](oauth2-proxy.md), or
-port-forward Pod ports 3113 and 443 to localhost for trusted local inspection.
+port-forward Pod port 3113 to localhost for trusted local inspection.
 The application has no Kubernetes API token or RBAC permissions.
 
 `env` accepts non-secret upstream environment variables. `extraEnv` supports
@@ -108,9 +94,9 @@ provider, and [resource sizing](resources.md) for CPU/memory requests and limits
 
 All other upstream settings are accepted through `env`/`extraEnv`/`envFrom`.
 The full reference is the versioned upstream
-[environment example](https://github.com/rohitg00/agentmemory/blob/v0.9.30/.env.example).
-Provider keys may trigger upstream automatic detection; explicitly choose your
-embedding provider. A key alone does not enable LLM-written compression.
+[environment example](https://github.com/rohitg00/agentmemory/blob/v0.9.33/.env.example).
+Explicitly set `EMBEDDING_PROVIDER` or `AGENTMEMORY_LLM_PROVIDER` when
+using a cloud provider. A key alone does not enable a cloud provider.
 Local embedding tests require neither an external model runner nor paid APIs.
 
 The upstream API validates one bearer secret per server instance. For distinct
@@ -142,15 +128,12 @@ and public IPv4 HTTPS for the first local model download. Traffic to private
 networks and link-local addresses is excluded from the HTTPS rule. Add explicit
 namespace/pod/port egress rules for in-cluster providers or Vault. Adjust DNS
 rules for NodeLocal DNS and IPv6 rules for IPv6 clusters. Generic Kubernetes
-NetworkPolicy cannot restrict internet egress by hostname. After the model is
-cached, set `networkPolicy.egress: []` for a local-only deployment. Your CNI
-must enforce policies. Warm and verify local vectors again before blocking
-egress; changing models requires another download.
+NetworkPolicy cannot restrict internet egress by hostname. Worker Compose needs
+HTTPS to resolve the pinned HTTP and state workers when a replacement pod starts,
+even if the worker binaries are cached on the PVC. Keep the chart's HTTPS egress
+rule when adding in-cluster egress rules: Helm replaces lists. Local embeddings
+also need HTTPS when the model is first downloaded or changes.
 
-The telemetry helper override resolves upstream transitive advisories:
-[GHSA-8988-4f7v-96qf](https://github.com/advisories/GHSA-8988-4f7v-96qf)
-and [GHSA-45rx-2jwx-cxfr](https://github.com/advisories/GHSA-45rx-2jwx-cxfr).
-The vendor's `@iii-dev/helpers` 0.24.5 uses patched OpenTelemetry 2.11 packages
-and adapts to their changed APIs. The iii wire SDK and engine remain at their
-upstream-matched 0.22.1 pins. SDK import and integration tests verify this
-helper override. Do not remove it until upstream resolves patched dependencies.
+`@iii-dev/helpers` is overridden to the same exact 0.25.1 version required by
+the upstream package, keeping it aligned with `iii-sdk` and the engine image.
+The dependency audit and runtime integration tests check this pinned set.

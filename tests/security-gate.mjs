@@ -5,9 +5,9 @@ if (process.argv.length < 3) throw new Error('Provide application and engine Gry
 let blocked = false;
 for (const path of process.argv.slice(2)) {
   const result = evaluateScan(JSON.parse(readFileSync(path, 'utf8')));
-  const heading = `${path}: ${result.all.length} total findings; ${result.blocking.length} fixable high/critical; ${result.unfixed.length} unfixed high/critical`;
+  const heading = `${path}: ${result.all.length} total findings, ${result.blocking.length} blocking high/critical (${result.unfixed.length} without a published fix)`;
   console.log(heading);
-  const lines = result.high.map((match) => {
+  const lines = result.blocking.map((match) => {
     const { vulnerability, artifact } = match;
     const text = `${vulnerability.id} ${artifact.name}@${artifact.version}: ${vulnerability.fix.versions.length ? `fixed in ${vulnerability.fix.versions.join(', ')}` : vulnerability.fix.state}`;
     console.log(text);

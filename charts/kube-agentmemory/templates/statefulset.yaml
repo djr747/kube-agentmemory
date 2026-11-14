@@ -82,25 +82,22 @@ spec:
           restartPolicy: Always
           image: {{ include "agentmemory.image" (dict "repository" .Values.engine.image.repository "tag" (.Values.engine.image.tag | default .Chart.AppVersion) "digest" .Values.engine.image.digest) | quote }}
           imagePullPolicy: {{ .Values.engine.image.pullPolicy }}
-          args: ["--config", "/app/config.yaml", "--no-update-check"]
+          args: ["compose", "--namespace", "agentmemory", "--up"]
           lifecycle:
             preStop:
               sleep:
                 seconds: {{ .Values.engine.shutdownDelaySeconds }}
           env:
             - {name: III_TELEMETRY_ENABLED, value: "false"}
-            - {name: III_STREAM_PORT, value: {{ .Values.engine.streamPort | quote }}}
+            - {name: HOME, value: /data/home}
+            - {name: III_COMPOSE_STATE_DIR, value: /data/compose-state}
           securityContext:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities:
               drop: [ALL]
-              {{ if lt (int $.Values.engine.streamPort) 1024 }}
-              add: [NET_BIND_SERVICE]
-              {{ end }}
           ports:
             - {name: http, containerPort: 3111}
-            - {name: stream, containerPort: {{ .Values.engine.streamPort }}}
           startupProbe:
             tcpSocket: {port: 3111}
             periodSeconds: 5
@@ -116,8 +113,8 @@ spec:
             {{- toYaml .Values.engine.resources | nindent 12 }}
           volumeMounts:
             - {name: data, mountPath: /data}
-            - {name: engine-config, mountPath: /app/config.yaml, subPath: config.yaml, readOnly: true}
             - {name: engine-work, mountPath: /app/config}
+            - {name: engine-config, mountPath: /app/config/worker-compose.yaml, subPath: worker-compose.yaml, readOnly: true}
             - {name: engine-tmp, mountPath: /tmp}
       containers:
         - name: app
@@ -128,7 +125,7 @@ spec:
             readOnlyRootFilesystem: true
             capabilities: {drop: [ALL]}
           env:
-            - {name: III_STREAM_PORT, value: {{ .Values.engine.streamPort | quote }}}
+            - {name: III_NAMESPACE, value: agentmemory}
             {{- range $key, $value := .Values.env }}
             - name: {{ $key }}
               value: {{ $value | quote }}
@@ -200,7 +197,7 @@ spec:
             - --pass-authorization-header=false
             - --request-logging=false
             - --api-route=^/agentmemory(/|$)
-            - --proxy-websockets=true
+            - --proxy-websockets=false
             - {{ printf "--oidc-issuer-url=%s" .Values.oauth2Proxy.issuerUrl | quote }}
             - {{ printf "--client-id=%s" .Values.oauth2Proxy.clientId | quote }}
             - {{ printf "--redirect-url=%s" .Values.oauth2Proxy.redirectUrl | quote }}

@@ -49,12 +49,11 @@ helm upgrade --install memory ./charts/kube-agentmemory \
 Use your built/published app and engine image settings as described in the
 README. The chart creates an additional UI Ingress; the original API Ingress
 continues forwarding `/agentmemory` to REST port 3111. The UI Ingress forwards
-`/`, `/oauth2/*`, same-origin browser API calls and WebSocket upgrades to OAuth2
+`/`, `/oauth2/*`, same-origin browser API calls and live event requests to OAuth2
 Proxy on port 4180. After authenticating the request, OAuth2 Proxy forwards it
 to stock Caddy on localhost:4181. Caddy sends HTTP to the viewer on localhost:3113
-and root WebSocket upgrades to the engine listener. The ingress controller must
-terminate TLS and forward cookies,
-the browser's `Origin` header and WebSocket upgrades. OAuth2 Proxy uses
+including the live event stream. The ingress controller must terminate TLS and
+forward cookies and the browser’s `Origin` header. OAuth2 Proxy uses
 Secure, HttpOnly, SameSite=Lax cookies, nonce verification and PKCE. HTTP access
 does not provide a working login session because cookies require HTTPS.
 
@@ -70,24 +69,15 @@ creates separate API and UI HTTPRoutes. The parent HTTPS listener must accept
 **both** hostnames and its certificate must cover both; an API-only hostname on
 the listener will reject the UI route. Keep routing to the two backends separate.
 
-The viewer reads the stream listener port from the live status endpoint. The
-chart sets that in-pod port to `443` by default and supplies it as
-`III_STREAM_PORT` to the app and engine, and renders that backend port in the
-Caddyfile. For standard HTTPS Ingress and Gateway API listeners, keep the default
-`443`. OAuth2 Proxy authenticates every forwarded HTTP/WebSocket request. Caddy
-distinguishes root WebSocket upgrades from HTTP using built-in request matchers.
-This uses standard Ingress and Gateway API backends without controller-specific
-CRDs, plugins or custom proxy code. Neither the viewer nor stream port receives
-an external address directly. The bearer API goes directly to AgentMemory,
-which validates `Authorization: Bearer <AGENTMEMORY_SECRET>`; Caddy is not in
-that request path.
-
-Caddy's WebSocket Origin check uses `https://<oauth2Proxy.uiHost>` from chart
-configuration, independent of incoming `Host` or `X-Forwarded-*` headers. It strips
-cookies and Authorization before forwarding to either local backend and sets
-the public upstream host/scheme explicitly. OAuth2 Proxy's callback URL is also
-explicitly configured. The ingress must sanitize forwarding headers from clients
-and supply its normal trusted HTTPS forwarding headers to OAuth2 Proxy.
+AgentMemory 0.9.33 sends live updates as an authenticated HTTP event stream at
+`/agentmemory/viewer/events`. That endpoint uses the same UI hostname, TLS
+listener and session cookie as the page. Preserve streaming responses: avoid
+buffering or response timeouts shorter than the event stream’s heartbeat.
+Caddy rejects the old browser WebSocket upgrade and routes HTTP to the viewer.
+It strips cookies and Authorization before forwarding and sets the public
+upstream host and scheme explicitly. The ingress must sanitize forwarding
+headers from clients and supply its trusted HTTPS headers to OAuth2 Proxy.
+The separate bearer API still validates `Authorization: Bearer <AGENTMEMORY_SECRET>`.
 
 The chart uses the official `docker.io/library/caddy:2.11.7-alpine` image with
 standard modules only. Set `caddy.image` to change its repository, tag or digest.
@@ -99,12 +89,12 @@ administration API, configuration persistence and automatic HTTPS are disabled;
 the ingress owns TLS. Only a bounded temporary volume is writable. Caddy and
 OAuth2 Proxy are external images covered by integration tests. CI and
 `make security` scan only the application and engine images built here.
-See [Caddy's WebSocket routing example](https://caddyserver.com/docs/caddyfile/matchers#named-matchers).
+
 
 Ingress and gateway replicas need no session affinity. OAuth2 Proxy uses its
 default cookie session store: the signed, encrypted session travels with each
 browser request and OAuth2 Proxy validates it before forwarding to Caddy. Caddy
-holds no login sessions. An open WebSocket stays on its
+holds no login sessions. An open event stream stays on its
 existing connection; a disconnect requires a fresh authenticated connection and
 can use a different ingress replica. AgentMemory itself remains a single writer;
 this does not add support for multiple AgentMemory replicas. See
@@ -113,16 +103,13 @@ this does not add support for multiple AgentMemory replicas. See
 Browser users log in with the identity provider and do not need the backend
 bearer secret. Outside this SSO route, the upstream viewer's Unlock prompt uses
 `AGENTMEMORY_SECRET`; there is no default username/admin password. For trusted
-local inspection, port-forward Pod ports 3113 and 443 to localhost; the loopback
+local inspection, port-forward Pod port 3113 to localhost; the loopback
 viewer already has the server token and does not prompt for it.
 
 These URLs serve different clients. Give agents the API hostname root as
 `AGENTMEMORY_URL` (for example, `https://memory.example.com`) and keep the
 existing bearer secret in `AGENTMEMORY_SECRET`. The API's HTTP routes are under
-`/agentmemory`, but the standard client adds that path itself. The browser's
-WebSocket uses the UI hostname and root path. OAuth2 Proxy authenticates it with
-the browser's OAuth session and Caddy forwards it internally to the engine;
-this is not the agent API URL.
+`/agentmemory`, but the standard client adds that path itself. The live event stream uses the UI hostname and the browser’s OAuth session.
 
 The upstream viewer currently builds its suggested agent URL using the internal
 REST listener port. Behind Ingress/Gateway this can display an address such as
@@ -130,8 +117,7 @@ REST listener port. Behind Ingress/Gateway this can display an address such as
 wrong hostname for agents. Do not copy that suggestion for a standard agent
 client; configure `AGENTMEMORY_URL` with the API hostname shown above. Direct
 API requests use `https://memory.example.com/agentmemory/...` and the existing
-bearer token. The UI's WebSocket remains on the UI hostname and is routed
-separately by the chart.
+bearer token.
 
 ## Vault or mounted files
 

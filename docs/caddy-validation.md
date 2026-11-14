@@ -1,4 +1,7 @@
-# Caddy validation status
+# Historical 0.1.2 validation: Caddy validation status
+
+This page describes the legacy WebSocket implementation. For the current release, see [the integration suite](../CONTRIBUTING.md) and [UI SSO](oauth2-proxy.md).
+
 
 Validated on 2026-10-15. Functional checks pass. The image security gate covers
 only the application and engine images built by this repository.

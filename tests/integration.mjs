@@ -5,7 +5,9 @@ import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { stringify, parse } from 'yaml';
+import { checkContainerRuntime } from './helpers/integration-preflight.mjs';
 
+const previous = { archive: process.env.PREVIOUS_CHART, image: process.env.PREVIOUS_IMAGE, engine: process.env.PREVIOUS_ENGINE_IMAGE };
 const image = process.env.IMAGE || 'kube-agentmemory:dev';
 const engineImage = process.env.ENGINE_IMAGE || 'kube-agentmemory-engine:dev';
 assert.match(image, /^[a-zA-Z0-9./_-]+:[a-zA-Z0-9._-]+$/, 'Use a tagged candidate image');
@@ -28,11 +30,11 @@ function capture(command, args) {
   return run(command, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' }).trim();
 }
 const kube = (args, options) => run('kubectl', ['--context', context, '-n', 'agentmemory', ...args], options);
-const smoke = (mode, state) => kube(['exec', 'memory-0', '-c', 'app', '--',
-  'node', '/app/tests/smoke.mjs', mode, ...(state ? [state] : [])]);
+const smoke = (mode, ...args) => kube(['exec', 'memory-0', '-c', 'app', '--',
+  'node', '/app/tests/smoke.mjs', mode, ...args]);
 function diagnostics() {
   for (const [file, args] of [
-    ['cluster.txt', ['get', 'pods,pvc,events', '-o', 'wide']],
+    ['cluster.txt', ['get', 'pods,pvc,ingress,events', '-o', 'wide']],
     ['services.json', ['get', 'services,endpointslices', '-o', 'json']],
     ['app.log', ['logs', 'memory-0', '-c', 'app']],
     ['engine.log', ['logs', 'memory-0', '-c', 'engine']],
@@ -44,6 +46,7 @@ function diagnostics() {
   }
 }
 try {
+  checkContainerRuntime();
   run('node', ['tests/caddy-config.mjs']);
   if (!reuse) {
     const clusters = capture('kind', ['get', 'clusters']).split('\n');
@@ -52,7 +55,11 @@ try {
     created = true;
     run('kind', ['create', 'cluster', '--name', cluster, '--wait', '180s']);
   }
-  run('kind', ['load', 'docker-image', image, engineImage, '--name', cluster]);
+  assert.ok(previous.archive && previous.image && previous.engine,
+    'Prepare the 0.1.2 chart and images with make integration-baseline first');
+  assert.notEqual(previous.image, image);
+  assert.notEqual(previous.engine, engineImage);
+  run('kind', ['load', 'docker-image', image, engineImage, previous.image, previous.engine, '--name', cluster]);
   const ns = capture('kubectl', ['--context', context, 'create', 'namespace', 'agentmemory', '--dry-run=client', '-o', 'yaml']);
   run('kubectl', ['--context', context, 'apply', '-f', '-'], { input: ns, stdio: ['pipe', 'inherit', 'inherit'] });
   run('kubectl', ['--context', context, 'label', 'namespace', 'agentmemory', 'pod-security.kubernetes.io/enforce=restricted', '--overwrite']);
@@ -69,10 +76,10 @@ try {
   const metadata = parse(capture('helm', ['show', 'chart', archive]));
   assert.equal(metadata.version, version);
   assert.equal(metadata.appVersion, version);
-  const imageParts = image.split(':');
-  const engineParts = engineImage.split(':');
-  function deploy(files, apiListener = 3111) {
-    run('helm', ['upgrade', '--install', 'memory', archive, '--kube-context', context, '-n', 'agentmemory',
+  function deploy(files, apiListener = 3111, baseline) {
+    const imageParts = (baseline?.image ?? image).split(':');
+    const engineParts = (baseline?.engine ?? engineImage).split(':');
+    run('helm', ['upgrade', '--install', 'memory', baseline?.archive ?? archive, '--kube-context', context, '-n', 'agentmemory',
       '--set', 'fullnameOverride=memory', '--set', `image.repository=${imageParts[0]}`,
       '--set', `image.tag=${imageParts[1]}`, '--set', 'image.pullPolicy=Never', '--set', 'persistence.size=1Gi',
       '--set', `service.port=${apiServicePort}`,
@@ -81,9 +88,6 @@ try {
       ...files.flatMap((file) => ['-f', file]), '--wait', '--timeout', '600s']);
     kube(['rollout', 'status', 'statefulset/memory', '--timeout=600s']);
     kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
-    const streamPort = capture('kubectl', ['--context', context, '-n', 'agentmemory', 'exec', 'memory-0', '-c', 'app', '--', 'node', '-e',
-      "fetch('http://127.0.0.1:3111/agentmemory/livez').then(async r => { const live = await r.json(); console.log(live.streamsPort); })"]);
-    assert.equal(streamPort, '443', 'AgentMemory must advertise the HTTPS WebSocket listener port');
     const services = JSON.parse(capture('kubectl', ['--context', context, '-n', 'agentmemory',
       'get', 'services', 'memory', 'memory-headless', '-o', 'json'])).items;
     const primary = services.find((s) => s.metadata.name === 'memory');
@@ -93,11 +97,25 @@ try {
     assert.equal(headless.spec.ports[0].port, apiListener);
     assert.equal(headless.spec.ports[0].targetPort, apiListener);
   }
-  deploy(['examples/local.yaml']);
+  const oldMetadata = parse(capture('helm', ['show', 'chart', previous.archive]));
+  assert.equal(oldMetadata.version, '0.1.2');
+  assert.equal(oldMetadata.appVersion, '0.1.2');
+  deploy(['examples/local.yaml'], 3111, previous);
   smoke('write');
   kube(['exec', 'memory-0', '-c', 'app', '--', 'node', '-e',
     "require('fs').copyFileSync('/tmp/agentmemory-test.json','/data/integration-test.json')"]);
   const uid = () => capture('kubectl', ['--context', context, '-n', 'agentmemory', 'get', 'pod', 'memory-0', '-o', 'jsonpath={.metadata.uid}']);
+  const pvcUid = () => capture('kubectl', ['--context', context, '-n', 'agentmemory',
+    'get', 'pvc', 'data-memory-0', '-o', 'jsonpath={.metadata.uid}']);
+  const originalClaim = pvcUid();
+  const originalPod = uid();
+  deploy(['examples/local.yaml']);
+  assert.notEqual(uid(), originalPod, 'Helm upgrade must replace the 0.1.2 pod');
+  assert.equal(pvcUid(), originalClaim, 'Helm upgrade must keep the original PVC');
+  smoke('read', '/data/integration-test.json');
+  console.log('Helm upgrade 0.1.2 to ' + version + ': memory and local vectors recovered on the same PVC');
+  smoke('write', '/data/integration-new-memory.json', '/integration/candidate');
+  smoke('read', '/data/integration-new-memory.json');
   const before = uid();
   kube(['delete', 'pod', 'memory-0', '--wait=true']);
   // rollout status also waits for the replacement to exist, avoiding a get/wait race.
@@ -105,12 +123,14 @@ try {
   kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
   assert.notEqual(uid(), before, 'Pod must be replaced for persistence test');
   smoke('read', '/data/integration-test.json');
+  smoke('read', '/data/integration-new-memory.json');
   deploy(['examples/local.yaml', 'examples/mounted-secret.yaml']);
   smoke('read', '/data/integration-test.json');
   run('helm', ['uninstall', 'memory', '--kube-context', context, '-n', 'agentmemory', '--wait']);
   kube(['get', 'pvc', 'data-memory-0']);
   deploy(['examples/local.yaml']);
   smoke('read', '/data/integration-test.json');
+  smoke('read', '/data/integration-new-memory.json');
   // Exercise the optional real OAuth2 Proxy sidecar against a disposable local OIDC issuer.
   const clientSecret = randomBytes(32).toString('hex');
   const cookieSecret = randomBytes(32);
@@ -118,9 +138,22 @@ try {
     stringData: { OAUTH2_PROXY_CLIENT_SECRET: clientSecret, OAUTH2_PROXY_COOKIE_SECRET: cookieSecret.toString('base64url') },
     data: { 'cookie-secret': cookieSecret.toString('base64') } };
   kube(['apply', '-f', '-'], { input: stringify(oauthSecret), stdio: ['pipe', 'inherit', 'inherit'] });
+  const tlsKey = join(temp, 'ingress.key');
+  const tlsCert = join(temp, 'ingress.crt');
+  run('openssl', ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-days', '1',
+    '-subj', '/CN=memory-ui.example.com', '-addext', 'subjectAltName=DNS:memory-ui.example.com,DNS:memory.example.com',
+    '-keyout', tlsKey, '-out', tlsCert], { stdio: 'pipe' });
+  const tlsSecret = capture('kubectl', ['--context', context, '-n', 'agentmemory',
+    'create', 'secret', 'tls', 'integration-ingress-tls', '--cert', tlsCert, '--key', tlsKey, '--dry-run=client', '-o', 'yaml']);
+  kube(['apply', '-f', '-'], { input: tlsSecret, stdio: ['pipe', 'inherit', 'inherit'] });
+  run('helm', ['upgrade', '--install', 'traefik', 'traefik', '--repo', 'https://traefik.github.io/charts',
+    '--version', '39.0.0', '--namespace', 'traefik', '--create-namespace', '--kube-context', context,
+    '--set', 'service.type=ClusterIP', '--set', 'providers.kubernetesCRD.enabled=false',
+    '--skip-crds', '--wait', '--timeout', '300s']);
   const fixture = [
     { apiVersion: 'v1', kind: 'ConfigMap', metadata: { name: 'oidc-fixture' }, data: {
       'server.mjs': readFileSync('tests/fixtures/oidc-fixture.mjs', 'utf8'),
+      'ingress.crt': readFileSync(tlsCert, 'utf8'),
       'service-client.mjs': readFileSync('tests/fixtures/service-client.mjs', 'utf8'),
     } },
     { apiVersion: 'apps/v1', kind: 'Deployment', metadata: { name: 'oidc-fixture' }, spec: { replicas: 1, selector: { matchLabels: { app: 'oidc-fixture' } }, template: {
@@ -145,19 +178,28 @@ try {
   });
   apiBearerSmoke();
   const oauthValues = join(temp, 'oauth-values.yaml');
+  // Helm replaces lists. Keep the chart's registry/model egress when adding the issuer.
+  const defaultEgress = parse(capture('helm', ['show', 'values', archive])).networkPolicy.egress;
   writeFileSync(oauthValues, stringify({ oauth2Proxy: { enabled: true,
     issuerUrl: 'http://oidc-fixture.agentmemory.svc.cluster.local:8080', clientId: 'agentmemory-integration',
     uiHost: 'memory-ui.example.com', redirectUrl: 'https://memory-ui.example.com/oauth2/callback', emailDomains: ['test.example'],
-    allowedGroups: ['agentmemory-users'], existingSecret: 'oauth-integration' },
-    env: { VIEWER_ALLOWED_ORIGINS: 'https://memory-ui.example.com' }, networkPolicy: { egress: [
+    allowedGroups: ['agentmemory-users'], existingSecret: 'oauth-integration', tlsSecretName: 'integration-ingress-tls' },
+    ingress: { tlsSecretName: 'integration-ingress-tls' },
+    env: { VIEWER_ALLOWED_ORIGINS: 'https://memory-ui.example.com' }, networkPolicy: {
+      ingressFrom: [{ podSelector: {} }, { namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'traefik' } },
+        podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], egress: [...defaultEgress,
       { to: [{ podSelector: { matchLabels: { app: 'oidc-fixture' } } }], ports: [{ protocol: 'TCP', port: 8080 }] },
     ] } }));
-  deploy(['examples/local.yaml', oauthValues]);
+  deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues]);
   smoke('read', '/data/integration-test.json'); // Official bearer integrations still work with SSO enabled.
   apiBearerSmoke();
-  const oauthSmoke = () => kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node', '--input-type=module'], {
+  const migratedMemory = capture('kubectl', ['--context', context, '-n', 'agentmemory', 'exec', 'memory-0',
+    '-c', 'app', '--', 'node', '-e', "process.stdout.write(require('node:fs').readFileSync('/data/integration-test.json'))"]);
+  const oauthSmoke = (ingress = false) => kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node',
+    '--input-type=module', '-', ...(ingress ? ['--ingress', migratedMemory] : [])], {
     input: readFileSync('tests/fixtures/oauth-smoke.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
   });
+  oauthSmoke(true);
   oauthSmoke();
   // Validate native file options too, including the raw binary cookie key format.
   const oauthFiles = join(temp, 'oauth-files.yaml');

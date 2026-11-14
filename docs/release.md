@@ -20,8 +20,8 @@ The committed chart uses `0.0.0` development metadata, like the reflector
 repository. Do not maintain another release number in `Chart.yaml`. `make package`
 reads `package.json` and supplies that version as both Helm `version` and
 `appVersion`, then verifies the archive and its app/engine image defaults. CI
-performs this packaging on PRs and branch pushes; both integration jobs download
-and test that exact archive. A source-chart install requires explicit app and
+performs this packaging on PRs and branch pushes; the amd64 integration job downloads
+and tests that exact archive. A source-chart install requires explicit app and
 engine image tags or digests. A packaged/released chart defaults to its generated
 release version.
 
@@ -32,13 +32,21 @@ and its PVC identity. For the existing `agentmemory` release, that value is
 `agentmemory-kube-agentmemory`; shortening it requires a separate, data-preserving
 PVC migration.
 
+For 0.1.3, keep the existing StatefulSet name, PVC and secrets. Back up the PVC
+before upgrading. Worker Compose opens the existing `/data/state_store.db` in
+place. Live viewer events now use HTTP SSE through the existing HTTPS Ingress;
+remove custom routes for the old root WebSocket and obsolete
+`III_STREAM_PORT` settings. Before rolling back to the old runtime, restore
+from the pre-upgrade backup if you need its original data state.
+
 After CI succeeds on main, the reusable release workflow:
 
 1. Checks the source revision and remote release state. An existing `vX.Y.Z`
    tag must be annotated and point to that exact tested commit; a published
    matching release makes publication a no-op.
-2. Uploads the **exact tested** amd64/arm64 app and engine images and assembles
-   their immutable multi-platform indexes; it does not rebuild the candidates.
+2. Uploads the exact Copa-patched and scanned amd64/arm64 application and engine
+   images from CI and assembles their immutable multi-platform indexes. The
+   amd64 pair also passes the packaged chart integration suite.
 3. Signs both index digests with keyless Cosign using GitHub OIDC and attaches
    signed SPDX SBOM attestations to each architecture's image digest.
 4. Creates provenance attestations for both image indexes and the tested chart
@@ -68,9 +76,9 @@ For both image repositories, the next release aliases are:
 
 | Tag | Purpose |
 | --- | --- |
-| `0.1.2` | Project release; the chart's default |
+| `0.1.3` | Project release; the chart's default |
 | `0.1` / `0` | Moving minor/major aliases |
-| `0.1.2-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
+| `0.1.3-agentmemory0.9.33-iii0.25.1` | Project plus exact upstream agentmemory/iii versions |
 | `latest` | Most recently published successful main release |
 | `sha-COMMIT-amd64` / `sha-COMMIT-arm64` | Exact architecture candidates |
 
