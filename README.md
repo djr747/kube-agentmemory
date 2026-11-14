@@ -88,7 +88,7 @@ Overlay **one** of `examples/traefik-ingress.yaml` or
 Traefik examples; the chart's UI routing uses a standard Service backend and
 does not require Traefik CRDs. For another controller, route the UI hostname to
 the chart's `-ui` Service on port 4180 and forward cookies, the browser's
-`Origin` header and WebSocket upgrades. Change the host, certificate Secret,
+`Origin` header and streaming HTTP responses. Change the host, certificate Secret,
 controller namespace and pod labels to match your cluster.
 Both routes preserve `/agentmemory`; do not strip that prefix or log the
 Authorization header.
@@ -120,7 +120,7 @@ standard agent integrations continue working. Set `oauth2Proxy.protectApi=true`
 only when agents can provide verified OIDC JWTs. Provider examples cover
 [Entra and local Keycloak](docs/oauth2-proxy.md). OAuth secrets support environment
 references, mounted files and Vault injection. UI SSO also adds the stock Caddy
-image for HTTP/WebSocket routing. Both external images are integration tested;
+image for HTTP and live event routing. Both external images are integration tested;
 neither is built or scanned by this project.
 
 With UI SSO, agents use the **API hostname**, for example
@@ -132,8 +132,8 @@ is not a valid Ingress/Gateway endpoint. Do not copy it for an agent. The API
 and UI each use public HTTPS port 443 through separate Ingress resources (or
 separate Gateway routes): the API route forwards to internal REST port 3111, and
 the UI route forwards to OAuth2 Proxy on internal port 4180. After authentication,
-it forwards to Caddy on localhost:4181, which sends HTTP to the viewer and root
-WebSocket upgrades to the engine listener. The bearer API bypasses both proxies.
+it forwards to Caddy on localhost:4181, which sends HTTP and live events to the
+viewer. The bearer API bypasses both proxies.
 No AgentMemory source patches or custom proxy code are required. See the
 [endpoint and SSO details](docs/oauth2-proxy.md).
 

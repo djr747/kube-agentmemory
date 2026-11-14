@@ -32,6 +32,13 @@ and its PVC identity. For the existing `agentmemory` release, that value is
 `agentmemory-kube-agentmemory`; shortening it requires a separate, data-preserving
 PVC migration.
 
+For 0.1.3, keep the existing StatefulSet name, PVC and secrets. Back up the PVC
+before upgrading. Worker Compose opens the existing `/data/state_store.db` in
+place. Live viewer events now use HTTP SSE through the existing HTTPS Ingress;
+remove custom routes for the old root WebSocket and obsolete
+`III_STREAM_PORT` settings. Before rolling back to the old runtime, restore
+from the pre-upgrade backup if you need its original data state.
+
 After CI succeeds on main, the reusable release workflow:
 
 1. Checks the source revision and remote release state. An existing `vX.Y.Z`
@@ -68,9 +75,9 @@ For both image repositories, the next release aliases are:
 
 | Tag | Purpose |
 | --- | --- |
-| `0.1.2` | Project release; the chart's default |
+| `0.1.3` | Project release; the chart's default |
 | `0.1` / `0` | Moving minor/major aliases |
-| `0.1.2-agentmemory0.9.30-iii0.22.1` | Project plus exact upstream agentmemory/iii versions |
+| `0.1.3-agentmemory0.9.33-iii0.25.1` | Project plus exact upstream agentmemory/iii versions |
 | `latest` | Most recently published successful main release |
 | `sha-COMMIT-amd64` / `sha-COMMIT-arm64` | Exact architecture candidates |
 

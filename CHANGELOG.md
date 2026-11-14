@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.3] - 2026-11-13
+
+- Update AgentMemory to 0.9.33 with its matching iii 0.25.1 engine and SDK. Start the pinned HTTP and state workers with Worker Compose, retaining the existing PVC and database path.
+- Serve viewer live events over authenticated HTTP through the existing HTTPS Ingress. Add an upgrade test from 0.1.2 and exercise OIDC, live events, and memory with WebSocket upgrades rejected.
+- Update dotenv to 18.0.9 and incorporate compatible Dependabot build dependencies and Actions. Keep the undici 8.12.4 security fix.
+
 ## [0.1.2] - 2026-10-14
 
 - Preserve Vault secret filename case so file-backed credentials match their configured paths.

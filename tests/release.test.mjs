@@ -88,7 +88,7 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   assert.deepEqual(ci.jobs.release.needs, ['validate', 'container']);
   assert.equal(ci.jobs.release.uses, './.github/workflows/release.yml');
   assert.ok(ci.jobs.container.steps.some((s) => s.with?.name === 'chart' && s.with.path === 'dist'));
-  assert.equal(ci.jobs.container.steps.find((s) => s.name === 'Test packaged chart with local embeddings').env.CHART_ARCHIVE_DIR, 'dist');
+  assert.equal(ci.jobs.container.steps.find((s) => s.name === 'Test release upgrade, memory, and OIDC through HTTPS Ingress').env.CHART_ARCHIVE_DIR, 'dist');
   assert.deepEqual(Object.keys(release.on), ['workflow_call']);
   assert.equal(release.jobs.prepare.if, condition);
   for (const job of [release.jobs.images, release.jobs.artifacts]) {

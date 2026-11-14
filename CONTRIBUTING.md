@@ -17,7 +17,7 @@ Run the standard checks from the repository root:
 make install
 make release-check
 make test chart audit
-make build
+make build integration-baseline
 make integration
 make security
 make package
@@ -54,12 +54,12 @@ Image scanning covers only images built by this repository. Stock Caddy and
 OAuth2 Proxy images are covered by integration tests but are not scanned here.
 
 `make integration` creates a disposable Kind cluster, deploys the **packaged**
-chart, checks authentication, real local vector generation, memory search,
-replacement-Pod persistence, file credentials, retained PVCs and reinstall
-persistence. It first checks that the Docker-compatible API is reachable with
+0.1.2 chart and images built by `make integration-baseline` from Git tag `v0.1.2`.
+It writes a memory and waits for its vector checkpoint, upgrades to the candidate
+on the same PVC, and verifies retrieval, new writes, restarts, and reinstall. It first checks that the Docker-compatible API is reachable with
 `docker info`; when using Podman, start its machine before running the test. Before
 creating the cluster, it uses the official Caddy binary to check routing order
-and stream backend selection at ports 443 and 3212.
+and confirms the viewer is the sole loopback upstream.
 It deliberately uses ClusterIP port 8080 and checks numeric endpoint
 targets and direct headless access in both bearer and OIDC modes. It uses a
 temporary kubeconfig and removes only the cluster it
@@ -72,8 +72,10 @@ and an `INTEGRATION_CLUSTER` starting with `agentmemory-integration-`.
 The suite also tests the optional external OAuth2 Proxy and stock Caddy images with a local
 JavaScript OIDC issuer, using PKCE, secure cookies and both environment/file
 OAuth credentials. Through the UI Service from a separate Pod, it checks
-authenticated HTTP and root WebSocket routing, cross-origin rejection and
-session reuse across changing forwarded headers. It verifies bearer-token API
+authenticated HTTP and live memory events, and session reuse across changing
+forwarded headers. It also deploys Traefik and repeats the login and event check
+through the chart’s HTTPS Ingress, with a trusted test certificate and WebSocket
+upgrades explicitly rejected. It verifies bearer-token API
 access after SSO is enabled. Caddy's loopback-only listener has no Service port.
 It then opts into API OIDC, accepts a signed JWT and rejects invalid tokens and
 the original memory secret on the API Service.
@@ -115,10 +117,11 @@ The npm tool uses `lockfile-only` updates to retain the vendor's supported range
 Its top-level dependency versions are maintained with the npm source version,
 not as independently upgraded application packages. Bootstrap verifies those
 ranges against the integrity-checked source archive before replacing its bundle.
-Docker engine update proposals remain visible, but the SDK/engine equality gate
-blocks unsupported engine-only changes. Agentmemory 0.9.30 depends on iii 0.22.1;
-0.23+ removed its worker configuration lifecycle. See the linked upstream
-configuration in [runtime configuration](docs/configuration.md).
+Docker engine update proposals remain visible, but agentmemory, `iii-sdk`,
+`@iii-dev/helpers` and the engine image must stay on the exact upstream-pinned
+version as a set. Agentmemory 0.9.33 pins all three runtime packages to 0.25.1.
+See the upstream release and compatibility details in
+[runtime configuration](docs/configuration.md).
 
 For an npm build-tool update, verify its official registry version, Node engines,
 tarball URL and SHA-512 integrity. Update `build/npm/package.json`'s version,
