@@ -76,14 +76,33 @@ jobs:
           ln -sf npm-cli.js .build-tools/npm/bin/npm
           echo "$GITHUB_WORKSPACE/.build-tools/npm/bin" >> "$GITHUB_PATH"
       - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+        if: matrix.arch == 'amd64'
         with:
           version: v3.19.0
+      - name: Enable the containerd image store for Copa
+        uses: docker/setup-docker-action@3f1ab1ab0e29231562e4db4ca600c1a49653bac6 # v5.7.0
+        with:
+          daemon-config: '{"features":{"containerd-snapshotter":true}}'
+          set-host: true
+      - name: Install verified Copa
+        env:
+          COPA_VERSION: '0.15.0'
+          IMAGE_ARCH: ${{ matrix.arch }}
+        run: |
+          copa_dir="$(mktemp -d)"
+          cd "$copa_dir"
+          archive="copa_${COPA_VERSION}_linux_${IMAGE_ARCH}.tar.gz"
+          url="https://github.com/project-copacetic/copacetic/releases/download/v${COPA_VERSION}"
+          curl --fail --silent --show-error --location --retry 3 --remote-name "$url/$archive"
+          curl --fail --silent --show-error --location --retry 3 --remote-name "$url/copacetic_checksums.txt"
+          awk -v archive="$archive" '$2 == archive {print}' copacetic_checksums.txt | sha256sum --check --strict
+          tar -xzf "$archive" copa
+          echo "$copa_dir" >> "$GITHUB_PATH"
       - name: Build locked candidate
         run: |
-          npm ci --include=optional --ignore-scripts --no-fund --no-audit
-          docker build -t kube-agentmemory:ci .
-          docker build -f Dockerfile.engine -t kube-agentmemory-engine:ci .
+          make build patch-images IMAGE=kube-agentmemory:ci ENGINE_IMAGE=kube-agentmemory-engine:ci
       - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        if: matrix.arch == 'amd64'
         with:
           name: chart
           path: dist
@@ -92,7 +111,7 @@ jobs:
         with:
           image: kube-agentmemory:ci
           severity-cutoff: high
-          fail-build: false # Full report; the JavaScript policy gate below decides failures.
+          fail-build: false # The blocking step evaluates both complete reports.
           grype-version: v0.120.1
           output-format: json
           output-file: grype-app.json
@@ -105,7 +124,24 @@ jobs:
           grype-version: v0.120.1
           output-format: json
           output-file: grype-engine.json
-      - name: Enforce fixable high/critical vulnerability policy
+      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
+        if: matrix.arch == 'amd64'
+        with:
+          version: v0.33.0
+          install_only: true
+      - run: make integration-baseline
+        if: matrix.arch == 'amd64'
+      - name: Test release upgrade, memory, and OIDC through HTTPS Ingress
+        if: matrix.arch == 'amd64'
+        env:
+          IMAGE: kube-agentmemory:ci
+          ENGINE_IMAGE: kube-agentmemory-engine:ci
+          CHART_ARCHIVE_DIR: dist
+          INTEGRATION_CLUSTER: agentmemory-integration-${{ github.run_id }}-${{ matrix.arch }}
+        run: make integration
+      - name: Block high and critical image vulnerabilities
+        # Report both the Ingress result and the blocking scan result on amd64.
+        if: ${{ !cancelled() }}
         run: node tests/security-gate.mjs grype-app.json grype-engine.json
       - name: Generate SBOM
         uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
@@ -121,18 +157,6 @@ jobs:
           format: spdx-json
           output-file: engine-sbom.spdx.json
           upload-artifact: false
-      - uses: helm/kind-action@ea822c7bf1874f08e5a491df991c228edffc3376 # v1.15.2
-        with:
-          version: v0.33.0
-          install_only: true
-      - run: make integration-baseline
-      - name: Test release upgrade, memory, and OIDC through HTTPS Ingress
-        env:
-          IMAGE: kube-agentmemory:ci
-          ENGINE_IMAGE: kube-agentmemory-engine:ci
-          CHART_ARCHIVE_DIR: dist
-          INTEGRATION_CLUSTER: agentmemory-integration-${{ github.run_id }}-${{ matrix.arch }}
-        run: make integration
       - name: Verify release signing tool installation
         if: matrix.arch == 'amd64'
         uses: sigstore/cosign-installer@756fe2d284c7292c4e9b62c8a28f1e5629c59532 # v4.1.3
@@ -142,7 +166,7 @@ jobs:
           cosign version
           cosign sign --help >/dev/null
           cosign attest --help >/dev/null
-      - name: Save exactly the tested candidate
+      - name: Save the validated candidate
         run: docker save kube-agentmemory:ci kube-agentmemory-engine:ci -o candidate.tar
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:

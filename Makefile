@@ -1,11 +1,12 @@
 IMAGE ?= kube-agentmemory:dev
 ENGINE_IMAGE ?= kube-agentmemory-engine:dev
 GRYPE ?= grype
+COPA ?= copa
 PREVIOUS_IMAGE ?= kube-agentmemory:previous
 PREVIOUS_ENGINE_IMAGE ?= kube-agentmemory-engine:previous
 PREVIOUS_CHART ?= dist/baseline/kube-agentmemory-0.1.2.tgz
 
-.PHONY: install check test audit chart build integration-baseline integration package security release-check release-sync
+.PHONY: install check test audit chart build patch-images integration-baseline integration package security release-check release-sync
 install:
 	npm ci --include=optional --ignore-scripts
 check:
@@ -31,6 +32,9 @@ chart:
 build:
 	docker build -t $(IMAGE) .
 	docker build -f Dockerfile.engine -t $(ENGINE_IMAGE) .
+patch-images:
+	$(COPA) patch --addr docker:// --timeout 10m --image "$(IMAGE)" --tag "$(IMAGE)"
+	$(COPA) patch --addr docker:// --timeout 10m --image "$(ENGINE_IMAGE)" --tag "$(ENGINE_IMAGE)"
 integration-baseline:
 	baseline=$$(mktemp -d); trap 'rm -rf "$$baseline"' EXIT; \
 	  git archive v0.1.2 > "$$baseline/source.tar" && tar -xf "$$baseline/source.tar" -C "$$baseline" && rm "$$baseline/source.tar" && \

@@ -88,7 +88,10 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   assert.deepEqual(ci.jobs.release.needs, ['validate', 'container']);
   assert.equal(ci.jobs.release.uses, './.github/workflows/release.yml');
   assert.ok(ci.jobs.container.steps.some((s) => s.with?.name === 'chart' && s.with.path === 'dist'));
-  assert.equal(ci.jobs.container.steps.find((s) => s.name === 'Test release upgrade, memory, and OIDC through HTTPS Ingress').env.CHART_ARCHIVE_DIR, 'dist');
+  const integration = ci.jobs.container.steps.find((s) => s.name === 'Test release upgrade, memory, and OIDC through HTTPS Ingress');
+  assert.equal(integration.env.CHART_ARCHIVE_DIR, 'dist');
+  assert.equal(integration.if, "matrix.arch == 'amd64'");
+  assert.equal(ci.jobs.container.steps.find((s) => s.run === 'make integration-baseline').if, integration.if);
   assert.deepEqual(Object.keys(release.on), ['workflow_call']);
   assert.equal(release.jobs.prepare.if, condition);
   for (const job of [release.jobs.images, release.jobs.artifacts]) {
@@ -105,7 +108,7 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   assert.match(publication, /node tests\/publish-release\.mjs/);
   assert.doesNotMatch(publication, /docker (?:build\b|buildx build\b)|pr merge/);
   const steps = release.jobs.artifacts.steps;
-  const signing = steps.findIndex((s) => s.name === 'Sign tested image indexes and attest architecture SBOMs');
+  const signing = steps.findIndex((s) => s.name === 'Sign image indexes and attest architecture SBOMs');
   const aliasing = steps.findIndex((s) => s.name === 'Publish image aliases, OCI chart and GitHub release');
   assert.ok(signing > 0 && aliasing > signing);
   assert.match(steps[signing].run, /cosign sign --yes/);

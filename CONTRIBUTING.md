@@ -17,7 +17,7 @@ Run the standard checks from the repository root:
 make install
 make release-check
 make test chart audit
-make build integration-baseline
+make build patch-images integration-baseline
 make integration
 make security
 make package
@@ -27,12 +27,16 @@ make package
 invariants, all examples, and release/dependency synchronization. `make audit`
 audits both the app lock and `build/npm` tool lock and fails on high/critical
 dependency advisories. The Distroless debug builder assembles npm from verified
-source and that tool lock, removing its vulnerable vendor bundle. Container CI additionally scans
-the built application and paired iii engine with Anchore Grype, failing on
-high/critical findings with published fixes. Full reports retain all severities;
-unfixed high/critical findings are listed in the CI summary. This policy matches
-the repository owner's chosen reference procedure. There are no advisory
-suppressions. Do not bypass security gates to publish.
+source and that tool lock, removing its vulnerable vendor bundle. CI runs Copa
+in comprehensive mode on both Distroless images for each architecture, then
+scans the patched images with Anchore Grype. High and Critical findings block
+publication even when the package repository has no fix. Reports retain all
+severities. The upgrade and Ingress integration suite runs once, on amd64.
+
+For a local build with the same OS updates, install Copa 0.15.0 and use Docker
+with its [containerd image store](https://docs.docker.com/engine/storage/containerd/).
+`make patch-images` patches the two local image tags selected by `IMAGE` and
+`ENGINE_IMAGE`. The integration suite and `make security` use those tags.
 
 SonarQube Cloud analysis is performed separately by its GitHub App using
 [Automatic Analysis](https://docs.sonarsource.com/sonarqube-cloud/analyzing-source-code/automatic-analysis).
@@ -74,8 +78,8 @@ JavaScript OIDC issuer, using PKCE, secure cookies and both environment/file
 OAuth credentials. Through the UI Service from a separate Pod, it checks
 authenticated HTTP and live memory events, and session reuse across changing
 forwarded headers. It also deploys Traefik and repeats the login and event check
-through the chart’s HTTPS Ingress, with a trusted test certificate and WebSocket
-upgrades explicitly rejected. It verifies bearer-token API
+through the chart’s HTTPS Ingress. It loads the initial snapshot, memory list
+and migrated record detail with WebSocket upgrades explicitly rejected. It verifies bearer-token API
 access after SSO is enabled. Caddy's loopback-only listener has no Service port.
 It then opts into API OIDC, accepts a signed JWT and rejects invalid tokens and
 the original memory secret on the API Service.
@@ -95,7 +99,7 @@ dated CHANGELOG entry on `develop`, update version-specific examples, then run
 `make package` generates both chart version/appVersion and checks default app and
 engine tags from the package version. Do not manually version the source chart.
 Run the full standard checks on `develop`, then prepare a reviewed PR into
-`main`. Only successful push CI on `main` publishes the tested amd64/arm64
+`main`. Only successful push CI on `main` publishes the patched and scanned amd64/arm64
 images, signs their index digests, attests image/chart provenance and architecture
 SBOMs, publishes release aliases/OCI chart, and creates the annotated version tag
 and GitHub Release. Do not create

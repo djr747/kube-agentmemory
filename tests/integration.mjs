@@ -193,8 +193,10 @@ try {
   deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues]);
   smoke('read', '/data/integration-test.json'); // Official bearer integrations still work with SSO enabled.
   apiBearerSmoke();
+  const migratedMemory = capture('kubectl', ['--context', context, '-n', 'agentmemory', 'exec', 'memory-0',
+    '-c', 'app', '--', 'node', '-e', "process.stdout.write(require('node:fs').readFileSync('/data/integration-test.json'))"]);
   const oauthSmoke = (ingress = false) => kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node',
-    '--input-type=module', '-', ...(ingress ? ['--ingress'] : [])], {
+    '--input-type=module', '-', ...(ingress ? ['--ingress', migratedMemory] : [])], {
     input: readFileSync('tests/fixtures/oauth-smoke.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
   });
   oauthSmoke(true);

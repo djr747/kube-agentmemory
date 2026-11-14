@@ -24,7 +24,7 @@ Run `make package` to generate the release chart from `package.json`.
 ```sh
 make install
 make test chart audit
-make build
+make build patch-images integration-baseline
 make integration
 ```
 
@@ -145,13 +145,11 @@ engine and proxy CPU/memory independently using the documented
 ## CI and security
 
 CI validates the dependency lock, release metadata, unit/chart tests and examples.
-It audits npm dependencies and scans only the app and engine images built by
-this project with Anchore Grype,
-creates an SBOM, and runs the packaged-chart integration on native amd64 and
-arm64 runners. High/critical findings with published fixes block the build; all
-findings are retained in reports and unfixed high/critical findings remain visible
-in the CI summary. No Aqua tools are used.
-Only successful push CI on `main` publishes the exact tested images and OCI chart,
+It audits npm dependencies, applies available Debian package updates to the
+Distroless images with Copa, and scans both architectures with Anchore Grype.
+Every High or Critical image finding blocks publication, including findings
+without a published fix. CI runs the packaged chart integration once on amd64.
+Only successful push CI on `main` publishes the validated images and OCI chart,
 then creates the version tag/GitHub Release. `develop` is the staging branch for
 reviewed PRs into `main`; it never publishes. Images include project/upstream
 version tags and `latest`. See [release structure and tags](docs/release.md).

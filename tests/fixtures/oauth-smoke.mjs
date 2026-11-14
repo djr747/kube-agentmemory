@@ -11,6 +11,8 @@ const jar = new Map();
 const publicOrigin = 'https://memory-ui.example.com';
 const serviceHost = 'memory-ui.agentmemory.svc.cluster.local';
 const ingress = process.argv.includes('--ingress');
+const snapshotPath = '/agentmemory/viewer/snapshot';
+const memoryListPath = '/agentmemory/memories?latest=true&limit=100';
 // Connect to the controller while preserving the public TLS name, certificate
 // validation and HTTP Host that a browser would send.
 const ingressIp = ingress ? (await resolve4('traefik.traefik.svc.cluster.local'))[0] : undefined;
@@ -85,12 +87,35 @@ assert.equal(status.status, 200, await status.text());
 const events = '/agentmemory/viewer/events';
 assert.equal((await proxy(events, false)).status, 401, 'an anonymous client must not open the live feed');
 if (ingress) {
+  const expected = JSON.parse(process.argv[process.argv.indexOf('--ingress') + 1]);
+  assert.ok(expected.id && expected.marker, 'the check needs a memory from the previous release');
   const rejected = await proxy('/', true, { headers: {
     Connection: 'Upgrade', Upgrade: 'websocket', Origin: publicOrigin,
     'Sec-WebSocket-Version': '13', 'Sec-WebSocket-Key': randomBytes(16).toString('base64'),
   } });
   assert.equal(rejected.status, 403, 'the HTTPS Ingress must reject the legacy WebSocket upgrade');
   await rejected.body?.cancel();
+  const detailPath = `/agentmemory/memories/${encodeURIComponent(expected.id)}`;
+  for (const path of [snapshotPath, memoryListPath, detailPath]) {
+    const anonymous = await proxy(path, false);
+    assert.equal(anonymous.status, 401, `anonymous viewer data request to ${path}`);
+    await anonymous.body?.cancel();
+  }
+  const snapshot = await proxy(snapshotPath);
+  assert.equal(snapshot.status, 200);
+  const data = await snapshot.json();
+  assert.equal(data.service, 'agentmemory');
+  assert.ok(data.counts.latestMemories > 0, 'the initial snapshot must report saved memories');
+  const list = await proxy(memoryListPath);
+  assert.equal(list.status, 200);
+  assert.ok((await list.json()).memories.some((memory) => memory.id === expected.id),
+    'the viewer list must include the memory saved before the upgrade');
+  const detail = await proxy(detailPath);
+  assert.equal(detail.status, 200);
+  const { memory } = await detail.json();
+  assert.equal(memory.id, expected.id);
+  assert.ok(memory.content.includes(expected.marker));
+  console.log('HTTPS Traefik Ingress: authenticated initial snapshot, memory list and migrated record detail passed');
 }
 if (!ingress) {
   for (const headers of [

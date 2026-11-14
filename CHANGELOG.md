@@ -5,6 +5,7 @@
 - Update AgentMemory to 0.9.33 with its matching iii 0.25.1 engine and SDK. Start the pinned HTTP and state workers with Worker Compose, retaining the existing PVC and database path.
 - Serve viewer live events over authenticated HTTP through the existing HTTPS Ingress. Add an upgrade test from 0.1.2 and exercise OIDC, live events, and memory with WebSocket upgrades rejected.
 - Update dotenv to 18.0.9 and incorporate compatible Dependabot build dependencies and Actions. Keep the undici 8.12.4 security fix.
+- Patch both Distroless images with Copa before scanning. Block publication on every High or Critical image finding. Run the Ingress suite once on amd64 and check that the viewer can load a migrated memory.
 
 ## [0.1.2] - 2026-10-14
 
