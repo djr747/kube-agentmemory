@@ -13,6 +13,7 @@ check:
 	node --check tests/publish-release.mjs
 	node --check tests/external-image.mjs
 	node --check tests/caddy-config.mjs
+	node --check tests/helpers/integration-preflight.mjs
 test: check
 	npm test
 audit:

@@ -56,8 +56,10 @@ OAuth2 Proxy images are covered by integration tests but are not scanned here.
 `make integration` creates a disposable Kind cluster, deploys the **packaged**
 chart, checks authentication, real local vector generation, memory search,
 replacement-Pod persistence, file credentials, retained PVCs and reinstall
-persistence. Before creating the cluster, it uses the official Caddy binary to
-check routing order and stream backend selection at ports 443 and 3212.
+persistence. It first checks that the Docker-compatible API is reachable with
+`docker info`; when using Podman, start its machine before running the test. Before
+creating the cluster, it uses the official Caddy binary to check routing order
+and stream backend selection at ports 443 and 3212.
 It deliberately uses ClusterIP port 8080 and checks numeric endpoint
 targets and direct headless access in both bearer and OIDC modes. It uses a
 temporary kubeconfig and removes only the cluster it

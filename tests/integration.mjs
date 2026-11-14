@@ -5,6 +5,7 @@ import { mkdirSync, mkdtempSync, writeFileSync, readFileSync, rmSync } from 'nod
 import { tmpdir } from 'node:os';
 import { resolve, join } from 'node:path';
 import { stringify, parse } from 'yaml';
+import { checkContainerRuntime } from './helpers/integration-preflight.mjs';
 
 const image = process.env.IMAGE || 'kube-agentmemory:dev';
 const engineImage = process.env.ENGINE_IMAGE || 'kube-agentmemory-engine:dev';
@@ -44,6 +45,7 @@ function diagnostics() {
   }
 }
 try {
+  checkContainerRuntime();
   run('node', ['tests/caddy-config.mjs']);
   if (!reuse) {
     const clusters = capture('kind', ['get', 'clusters']).split('\n');
