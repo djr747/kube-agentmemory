@@ -93,8 +93,8 @@ jobs:
           cd "$copa_dir"
           archive="copa_${COPA_VERSION}_linux_${IMAGE_ARCH}.tar.gz"
           url="https://github.com/project-copacetic/copacetic/releases/download/v${COPA_VERSION}"
-          curl --fail --silent --show-error --location --retry 3 --remote-name "$url/$archive"
-          curl --fail --silent --show-error --location --retry 3 --remote-name "$url/copacetic_checksums.txt"
+          curl --proto '=https' --proto-redir '=https' --fail --silent --show-error --location --retry 3 --remote-name "$url/$archive"
+          curl --proto '=https' --proto-redir '=https' --fail --silent --show-error --location --retry 3 --remote-name "$url/copacetic_checksums.txt"
           awk -v archive="$archive" '$2 == archive {print}' copacetic_checksums.txt | sha256sum --check --strict
           tar -xzf "$archive" copa
           echo "$copa_dir" >> "$GITHUB_PATH"
