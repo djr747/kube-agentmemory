@@ -54,6 +54,8 @@ test('single writer, retained storage, restricted containers and private engine 
   assert.match(config, /file_path: \/data\/state_store\.db/);
   assert.match(config, /package:\/\/api\.workers\.iii\.dev\/state/);
   assert.match(config, /package:\/\/api\.workers\.iii\.dev\/http/);
+  assert.equal(parse(config).containers.state.config_override.adapter.config.save_interval_ms, 2000,
+    'the state worker schema requires a numeric save interval');
   const net = manifests.find((m) => m.kind === 'NetworkPolicy');
   assert.deepEqual(net.spec.policyTypes, ['Ingress', 'Egress']);
   assert.deepEqual(net.spec.ingress[0].ports, [{ protocol: 'TCP', port: 3111 }]);
