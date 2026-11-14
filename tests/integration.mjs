@@ -30,8 +30,8 @@ function capture(command, args) {
   return run(command, args, { stdio: ['ignore', 'pipe', 'pipe'], encoding: 'utf8' }).trim();
 }
 const kube = (args, options) => run('kubectl', ['--context', context, '-n', 'agentmemory', ...args], options);
-const smoke = (mode, state) => kube(['exec', 'memory-0', '-c', 'app', '--',
-  'node', '/app/tests/smoke.mjs', mode, ...(state ? [state] : [])]);
+const smoke = (mode, ...args) => kube(['exec', 'memory-0', '-c', 'app', '--',
+  'node', '/app/tests/smoke.mjs', mode, ...args]);
 function diagnostics() {
   for (const [file, args] of [
     ['cluster.txt', ['get', 'pods,pvc,ingress,events', '-o', 'wide']],
@@ -114,7 +114,7 @@ try {
   assert.equal(pvcUid(), originalClaim, 'Helm upgrade must keep the original PVC');
   smoke('read', '/data/integration-test.json');
   console.log('Helm upgrade 0.1.2 to ' + version + ': memory and local vectors recovered on the same PVC');
-  smoke('write', '/data/integration-new-memory.json');
+  smoke('write', '/data/integration-new-memory.json', '/integration/candidate');
   smoke('read', '/data/integration-new-memory.json');
   const before = uid();
   kube(['delete', 'pod', 'memory-0', '--wait=true']);
@@ -123,12 +123,14 @@ try {
   kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
   assert.notEqual(uid(), before, 'Pod must be replaced for persistence test');
   smoke('read', '/data/integration-test.json');
+  smoke('read', '/data/integration-new-memory.json');
   deploy(['examples/local.yaml', 'examples/mounted-secret.yaml']);
   smoke('read', '/data/integration-test.json');
   run('helm', ['uninstall', 'memory', '--kube-context', context, '-n', 'agentmemory', '--wait']);
   kube(['get', 'pvc', 'data-memory-0']);
   deploy(['examples/local.yaml']);
   smoke('read', '/data/integration-test.json');
+  smoke('read', '/data/integration-new-memory.json');
   // Exercise the optional real OAuth2 Proxy sidecar against a disposable local OIDC issuer.
   const clientSecret = randomBytes(32).toString('hex');
   const cookieSecret = randomBytes(32);
