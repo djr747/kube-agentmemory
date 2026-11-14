@@ -178,6 +178,8 @@ try {
   });
   apiBearerSmoke();
   const oauthValues = join(temp, 'oauth-values.yaml');
+  // Helm replaces lists. Keep the chart's registry/model egress when adding the issuer.
+  const defaultEgress = parse(capture('helm', ['show', 'values', archive])).networkPolicy.egress;
   writeFileSync(oauthValues, stringify({ oauth2Proxy: { enabled: true,
     issuerUrl: 'http://oidc-fixture.agentmemory.svc.cluster.local:8080', clientId: 'agentmemory-integration',
     uiHost: 'memory-ui.example.com', redirectUrl: 'https://memory-ui.example.com/oauth2/callback', emailDomains: ['test.example'],
@@ -185,19 +187,18 @@ try {
     ingress: { tlsSecretName: 'integration-ingress-tls' },
     env: { VIEWER_ALLOWED_ORIGINS: 'https://memory-ui.example.com' }, networkPolicy: {
       ingressFrom: [{ podSelector: {} }, { namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'traefik' } },
-        podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], egress: [
+        podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], egress: [...defaultEgress,
       { to: [{ podSelector: { matchLabels: { app: 'oidc-fixture' } } }], ports: [{ protocol: 'TCP', port: 8080 }] },
     ] } }));
-  deploy(['examples/local.yaml', oauthValues]);
+  deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues]);
   smoke('read', '/data/integration-test.json'); // Official bearer integrations still work with SSO enabled.
   apiBearerSmoke();
   const oauthSmoke = (ingress = false) => kube(['exec', '-i', 'deployment/oidc-fixture', '-c', 'issuer', '--', 'node',
     '--input-type=module', '-', ...(ingress ? ['--ingress'] : [])], {
     input: readFileSync('tests/fixtures/oauth-smoke.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
   });
-  oauthSmoke();
-  deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues]);
   oauthSmoke(true);
+  oauthSmoke();
   // Validate native file options too, including the raw binary cookie key format.
   const oauthFiles = join(temp, 'oauth-files.yaml');
   writeFileSync(oauthFiles, stringify({ oauth2Proxy: { existingSecret: '',

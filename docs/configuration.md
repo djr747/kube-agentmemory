@@ -128,12 +128,11 @@ and public IPv4 HTTPS for the first local model download. Traffic to private
 networks and link-local addresses is excluded from the HTTPS rule. Add explicit
 namespace/pod/port egress rules for in-cluster providers or Vault. Adjust DNS
 rules for NodeLocal DNS and IPv6 rules for IPv6 clusters. Generic Kubernetes
-NetworkPolicy cannot restrict internet egress by hostname. After the model is
-cached, set `networkPolicy.egress: []` for a local-only deployment. Your CNI
-must enforce policies. Warm and verify local vectors again before blocking
-egress; changing models requires another download. The Compose engine must also
-fetch its pinned HTTP and state workers on first start. Keep HTTPS egress until
-the worker cache is populated on the PVC.
+NetworkPolicy cannot restrict internet egress by hostname. Worker Compose needs
+HTTPS to resolve the pinned HTTP and state workers when a replacement pod starts,
+even if the worker binaries are cached on the PVC. Keep the chart's HTTPS egress
+rule when adding in-cluster egress rules: Helm replaces lists. Local embeddings
+also need HTTPS when the model is first downloaded or changes.
 
 `@iii-dev/helpers` is overridden to the same exact 0.25.1 version required by
 the upstream package, keeping it aligned with `iii-sdk` and the engine image.
