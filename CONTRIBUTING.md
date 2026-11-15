@@ -59,7 +59,8 @@ Image scanning covers only images built by this repository. Stock Caddy and
 OAuth2 Proxy images are covered by integration tests but are not scanned here.
 
 `make integration` creates a disposable Kind cluster and deploys the published
-0.1.3 chart and images pulled by `make integration-baseline`.
+0.1.3 chart downloaded by `make integration-baseline`. Kind pulls the published
+0.1.3 images directly from GHCR.
 It writes a memory and waits for its vector checkpoint, upgrades to the candidate
 on the same PVC, and verifies retrieval, new writes, restarts, and reinstall. It first checks that the Docker-compatible API is reachable with
 `docker info`; when using Podman, start its machine before running the test. Before

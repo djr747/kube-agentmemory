@@ -56,10 +56,10 @@ try {
     run('kind', ['create', 'cluster', '--name', cluster, '--wait', '180s']);
   }
   assert.ok(previous.archive && previous.image && previous.engine,
-    'Prepare the 0.1.3 chart and images with make integration-baseline first');
+    'Prepare the 0.1.3 chart with make integration-baseline first');
   assert.notEqual(previous.image, image);
   assert.notEqual(previous.engine, engineImage);
-  run('kind', ['load', 'docker-image', image, engineImage, previous.image, previous.engine, '--name', cluster]);
+  run('kind', ['load', 'docker-image', image, engineImage, '--name', cluster]);
   const ns = capture('kubectl', ['--context', context, 'create', 'namespace', 'agentmemory', '--dry-run=client', '-o', 'yaml']);
   run('kubectl', ['--context', context, 'apply', '-f', '-'], { input: ns, stdio: ['pipe', 'inherit', 'inherit'] });
   run('kubectl', ['--context', context, 'label', 'namespace', 'agentmemory', 'pod-security.kubernetes.io/enforce=restricted', '--overwrite']);
@@ -79,12 +79,13 @@ try {
   function deploy(files, apiListener = 3111, baseline) {
     const imageParts = (baseline?.image ?? image).split(':');
     const engineParts = (baseline?.engine ?? engineImage).split(':');
+    const pullPolicy = baseline ? 'IfNotPresent' : 'Never';
     run('helm', ['upgrade', '--install', 'memory', baseline?.archive ?? archive, '--kube-context', context, '-n', 'agentmemory',
       '--set', 'fullnameOverride=memory', '--set', `image.repository=${imageParts[0]}`,
-      '--set', `image.tag=${imageParts[1]}`, '--set', 'image.pullPolicy=Never', '--set', 'persistence.size=1Gi',
+      '--set', `image.tag=${imageParts[1]}`, '--set', `image.pullPolicy=${pullPolicy}`, '--set', 'persistence.size=1Gi',
       '--set', `service.port=${apiServicePort}`,
       '--set', `engine.image.repository=${engineParts[0]}`, '--set', `engine.image.tag=${engineParts[1]}`,
-      '--set', 'engine.image.pullPolicy=Never',
+      '--set', `engine.image.pullPolicy=${pullPolicy}`,
       ...files.flatMap((file) => ['-f', file]), '--wait', '--timeout', '600s']);
     kube(['rollout', 'status', 'statefulset/memory', '--timeout=600s']);
     kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);

@@ -36,8 +36,6 @@ patch-images:
 	$(COPA) patch --addr docker:// --timeout 10m --image "$(IMAGE)" --tag "$(IMAGE)"
 	$(COPA) patch --addr docker:// --timeout 10m --image "$(ENGINE_IMAGE)" --tag "$(ENGINE_IMAGE)"
 integration-baseline:
-	docker pull "$(PREVIOUS_IMAGE)"
-	docker pull "$(PREVIOUS_ENGINE_IMAGE)"
 	mkdir -p "$$(dirname "$(PREVIOUS_CHART)")"
 	helm pull oci://ghcr.io/djr747/helm-charts/kube-agentmemory --version 0.1.3 --destination "$$(dirname "$(PREVIOUS_CHART)")"
 integration:
