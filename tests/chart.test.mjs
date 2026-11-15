@@ -65,6 +65,17 @@ test('single writer, retained storage, restricted containers and private engine 
   assert.deepEqual(net.spec.policyTypes, ['Ingress', 'Egress']);
   assert.deepEqual(net.spec.ingress[0].ports, [{ protocol: 'TCP', port: 3111 }]);
 });
+test('engine work volume and ephemeral-storage budget accept overrides', () => {
+  const manifests = render([...auth, '--set', 'engine.workVolumeSizeLimit=8Gi',
+    '--set', 'engine.resources.requests.ephemeral-storage=2Gi',
+    '--set', 'engine.resources.limits.ephemeral-storage=9Gi']);
+  const pod = manifests.find((m) => m.kind === 'StatefulSet').spec.template.spec;
+  assert.equal(pod.volumes.find((v) => v.name === 'engine-work').emptyDir.sizeLimit, '8Gi');
+  const engine = pod.initContainers.find((container) => container.name === 'engine');
+  assert.equal(engine.resources.requests['ephemeral-storage'], '2Gi');
+  assert.equal(engine.resources.limits['ephemeral-storage'], '9Gi');
+  assert.match(render([...auth, '--set-string', 'engine.workVolumeSizeLimit='], false), /workVolumeSizeLimit/);
+});
 test('API OIDC is opt-in, removes direct ingress and changes both Service targets', () => {
   assert.match(render([...auth, '--set', 'oauth2Proxy.protectApi=true'], false), /requires oauth2Proxy.enabled/);
   for (const route of ['traefik-ingress', 'traefik-gateway']) {

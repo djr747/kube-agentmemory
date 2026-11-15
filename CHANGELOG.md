@@ -2,7 +2,7 @@
 
 ## [0.1.4] - 2026-11-15
 
-- Prevent pod eviction as iii's trace archive grows. Raise the engine work volume cap and ephemeral-storage budget.
+- Prevent pod eviction as iii's trace archive grows. Default the configurable `engine.workVolumeSizeLimit` to 4 GiB and raise the engine's ephemeral-storage budget.
 - Test a Helm upgrade from 0.1.3 and keep authenticated Ingress live events connected while the engine work volume is under disk load.
 
 ## [0.1.3] - 2026-11-13

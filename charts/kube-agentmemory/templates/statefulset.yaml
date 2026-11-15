@@ -286,8 +286,9 @@ spec:
         - name: engine-config
           configMap:
             name: {{ include "agentmemory.fullname" . }}-engine
-        # iii's trace archive lives below the working directory and can use 1 GiB before SQLite maintenance.
-        - {name: engine-work, emptyDir: {sizeLimit: 4Gi}}
+        - name: engine-work
+          emptyDir:
+            sizeLimit: {{ .Values.engine.workVolumeSizeLimit | quote }}
         - {name: engine-tmp, emptyDir: {sizeLimit: 64Mi}}
         - {name: app-tmp, emptyDir: {sizeLimit: 256Mi}}
         {{- if .Values.oauth2Proxy.enabled }}

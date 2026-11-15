@@ -20,13 +20,28 @@ startup; a memory request does not prevent the workload using up to its limit.
 
 Ephemeral storage covers container logs, writable layers and disk-backed
 `emptyDir` volumes, including `/tmp`. Requests total 1124Mi and limits total
-5632Mi without SSO, or 1144Mi and 5760Mi with SSO. The 4 GiB engine work volume
-accommodates iii's default 1 GiB trace archive and gives SQLite room for
+5632Mi without SSO, or 1144Mi and 5760Mi with SSO. The engine work volume
+defaults to 4 GiB. That accommodates iii's default 1 GiB trace archive and gives SQLite room for
 transient writes and maintenance. Persistent memory and downloaded model
 weights use the PVC and are sized separately by `persistence.size`. Increase
 `requests.ephemeral-storage` and `limits.ephemeral-storage` in the same resource
 overlays when temporary files or logs grow; exceeding the Pod budget can cause
 eviction.
+
+Override the work-volume cap with `engine.workVolumeSizeLimit` and set the
+engine's ephemeral-storage budget in the same values file. Leave space in the
+pod's total storage budget for container logs, writable layers, and other
+temporary volumes.
+
+```yaml
+engine:
+  workVolumeSizeLimit: 8Gi
+  resources:
+    requests:
+      ephemeral-storage: 2Gi
+    limits:
+      ephemeral-storage: 9Gi
+```
 
 Kubernetes schedules using requests, throttles CPU at limits and can terminate
 containers that exceed memory limits. See

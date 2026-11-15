@@ -10,6 +10,7 @@ image:
 imagePullSecrets: []
 engine:
   shutdownDelaySeconds: 5 # Allow the last periodic state-store flush after app shutdown
+  workVolumeSizeLimit: 4Gi # Allow room for iii's trace archive and SQLite maintenance
   image:
     repository: ghcr.io/djr747/kube-agentmemory-engine
     tag: "" # Chart appVersion; Dockerfile.engine preserves the paired iii-sdk pin

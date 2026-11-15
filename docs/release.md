@@ -41,9 +41,10 @@ remove custom routes for the old root WebSocket and obsolete
 `III_STREAM_PORT` settings. Before rolling back to the old runtime, restore
 from the pre-upgrade backup if you need its original data state.
 
-For 0.1.4, reserve the engine ephemeral-storage budget on the node. Custom engine
-resource overlays should account for the 4 GiB work volume and leave room for
-container logs and temporary files. See [resource sizing](resources.md).
+For 0.1.4, reserve the engine ephemeral-storage budget on the node. The work
+volume defaults to 4 GiB and can be overridden with `engine.workVolumeSizeLimit`.
+Custom resource overlays should leave room for container logs and temporary
+files. See [resource sizing](resources.md).
 
 After CI succeeds on main, the reusable release workflow:
 
