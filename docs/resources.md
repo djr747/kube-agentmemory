@@ -8,7 +8,7 @@ can use more CPU/memory than idle operation.
 | Container / Helm key | CPU request | Memory request | CPU limit | Memory limit | Ephemeral request | Ephemeral limit |
 | --- | --- | --- | --- | --- | --- | --- |
 | App / `resources` | 250m | 512Mi | 2 CPUs | 2Gi | 100Mi | 512Mi |
-| Engine / `engine.resources` | 100m | 128Mi | 1 CPU | 1Gi | 50Mi | 256Mi |
+| Engine / `engine.resources` | 100m | 128Mi | 1 CPU | 1Gi | 1Gi | 5Gi |
 | Optional proxy / `oauth2Proxy.resources` | 50m | 64Mi | 500m | 256Mi | 10Mi | 64Mi |
 | Optional UI routing / `caddy.resources` | 25m | 32Mi | 250m | 128Mi | 10Mi | 64Mi |
 
@@ -19,8 +19,10 @@ provider add their own requirements. Reserve node headroom for those and model
 startup; a memory request does not prevent the workload using up to its limit.
 
 Ephemeral storage covers container logs, writable layers and disk-backed
-`emptyDir` volumes, including `/tmp`. Requests total 150Mi and limits total 768Mi
-without SSO, or 170Mi/896Mi with SSO. Persistent memory and downloaded model
+`emptyDir` volumes, including `/tmp`. Requests total 1124Mi and limits total
+5632Mi without SSO, or 1144Mi and 5760Mi with SSO. The 4 GiB engine work volume
+accommodates iii's default 1 GiB trace archive and gives SQLite room for
+transient writes and maintenance. Persistent memory and downloaded model
 weights use the PVC and are sized separately by `persistence.size`. Increase
 `requests.ephemeral-storage` and `limits.ephemeral-storage` in the same resource
 overlays when temporary files or logs grow; exceeding the Pod budget can cause

@@ -29,6 +29,11 @@ test('single writer, retained storage, restricted containers and private engine 
   assert.equal(sts.spec.persistentVolumeClaimRetentionPolicy.whenDeleted, 'Retain');
   assert.equal(sts.spec.template.spec.automountServiceAccountToken, false);
   assert.equal(sts.spec.template.spec.securityContext.runAsNonRoot, true);
+  const engineWork = sts.spec.template.spec.volumes.find((volume) => volume.name === 'engine-work');
+  const engineStorage = sts.spec.template.spec.initContainers[0].resources;
+  assert.equal(engineWork.emptyDir.sizeLimit, '4Gi');
+  assert.equal(engineStorage.requests['ephemeral-storage'], '1Gi');
+  assert.equal(engineStorage.limits['ephemeral-storage'], '5Gi');
   assert.equal(sts.spec.template.spec.initContainers[0].restartPolicy, 'Always');
   assert.equal(sts.spec.template.spec.initContainers[0].lifecycle.preStop.sleep.seconds, 5);
   assert.deepEqual(sts.spec.template.spec.initContainers[0].args, ['compose', '--namespace', 'agentmemory', '--up']);

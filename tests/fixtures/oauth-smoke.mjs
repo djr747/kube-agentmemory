@@ -124,7 +124,7 @@ if (!ingress) {
   ]) assert.equal((await proxy('/agentmemory/status', true, { headers })).status, 200);
 }
 const controller = new AbortController();
-const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(25000)]);
+const signal = AbortSignal.any([controller.signal, AbortSignal.timeout(ingress ? 150000 : 25000)]);
 const marker = `ingress-live-${randomBytes(8).toString('hex')}`;
 try {
   const response = await proxy(events, true, { headers: { Accept: 'text/event-stream' }, signal });
@@ -136,7 +136,7 @@ try {
   async function nextFrame() {
     while (!pending.includes('\n\n')) {
       const { done, value } = await reader.read();
-      assert.equal(done, false, 'the live feed ended before delivering the memory');
+      assert.equal(done, false, 'the live feed ended during verification');
       pending += decoder.decode(value, { stream: true }).replaceAll('\r', '');
       assert.ok(pending.length < 1024 * 1024, 'oversized event frame');
     }
@@ -158,6 +158,15 @@ try {
     if (!payload) continue;
     const event = JSON.parse(payload.slice(6));
     if (event.data?.memoryId === id && event.type === 'memory.created') break;
+  }
+  if (ingress) {
+    const stableUntil = performance.now() + 90000;
+    let heartbeats = 0;
+    while (performance.now() < stableUntil) {
+      if (await nextFrame() === ': ping') heartbeats++;
+    }
+    assert.ok(heartbeats >= 5, 'the live feed must keep delivering heartbeats throughout the disk load test');
+    console.log('HTTPS Traefik Ingress: authenticated SSE stayed connected for 90 seconds under engine disk load');
   }
 } finally {
   controller.abort();

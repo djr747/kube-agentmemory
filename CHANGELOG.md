@@ -1,5 +1,10 @@
 # Changelog
 
+## [0.1.4] - 2026-11-15
+
+- Prevent pod eviction as iii's trace archive grows. Raise the engine work volume cap and ephemeral-storage budget.
+- Test a Helm upgrade from 0.1.3 and keep authenticated Ingress live events connected while the engine work volume is under disk load.
+
 ## [0.1.3] - 2026-11-13
 
 - Update AgentMemory to 0.9.33 with its matching iii 0.25.1 engine and SDK. Start the pinned HTTP and state workers with Worker Compose, retaining the existing PVC and database path.
