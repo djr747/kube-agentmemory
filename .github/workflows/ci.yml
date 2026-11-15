@@ -2,7 +2,7 @@ name: Build, security and integration
 on:
   pull_request:
   push:
-    branches: [main, develop]
+    branches: [main]
   workflow_dispatch:
   schedule:
     - cron: '23 4 * * 1'

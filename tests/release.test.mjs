@@ -82,7 +82,8 @@ test('publishing is gated on successful main push CI and reuses tested archives'
   const ci = parse(readFileSync('.github/workflows/ci.yml', 'utf8'));
   const release = parse(readFileSync('.github/workflows/release.yml', 'utf8'));
   const condition = "github.event_name == 'push' && github.ref == 'refs/heads/main'";
-  assert.deepEqual(ci.on.push.branches, ['main', 'develop']);
+  assert.equal(ci.on.pull_request, null);
+  assert.deepEqual(ci.on.push.branches, ['main']);
   assert.equal(ci.on.push.tags, undefined);
   assert.equal(ci.jobs.release.if, condition);
   assert.deepEqual(ci.jobs.release.needs, ['validate', 'container']);

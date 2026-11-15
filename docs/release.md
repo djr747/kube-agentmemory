@@ -1,10 +1,11 @@
 # Release process
 
 `develop` is the staging branch. Prepare changes, version metadata and the
-changelog there, then open a reviewed PR into `main`. Both branches and PRs run
-validation, security scans and packaged-chart integration. **Only a push to
-`main` can publish images, an OCI chart or a GitHub Release.** Develop, PR,
-manual, tag and scheduled runs do not publish. There is no automated PR merge.
+changelog there, then open a reviewed PR into `main`. Opening, reopening, or
+pushing commits to a PR runs validation, security scans and packaged-chart
+integration. A push to `main` runs the same checks and can publish images, an
+OCI chart and a GitHub Release. The workflow also supports manual runs and weekly
+checks.
 
 `package.json` is the version source. Before a release:
 
@@ -20,8 +21,8 @@ The committed chart uses `0.0.0` development metadata, like the reflector
 repository. Do not maintain another release number in `Chart.yaml`. `make package`
 reads `package.json` and supplies that version as both Helm `version` and
 `appVersion`, then verifies the archive and its app/engine image defaults. CI
-performs this packaging on PRs and branch pushes; the amd64 integration job downloads
-and tests that exact archive. A source-chart install requires explicit app and
+packages the chart during validation. The amd64 integration job downloads and
+tests that exact archive. A source-chart install requires explicit app and
 engine image tags or digests. A packaged/released chart defaults to its generated
 release version.
 
