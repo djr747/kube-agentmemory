@@ -29,9 +29,10 @@ audits both the app lock and `build/npm` tool lock and fails on high/critical
 dependency advisories. The Distroless debug builder assembles npm from verified
 source and that tool lock, removing its vulnerable vendor bundle. CI runs Copa
 in comprehensive mode on both Distroless images for each architecture, then
-scans the patched images with Anchore Grype. High and Critical findings block
-publication even when the package repository has no fix. Reports retain all
-severities. The upgrade and Ingress integration suite runs once, on amd64.
+scans the patched images with Anchore Grype. High and Critical image findings
+block publication when Grype reports a known fix. Reports retain all severities,
+and the CI summary also lists High and Critical findings without known fixes.
+The upgrade and Ingress integration suite runs once, on amd64.
 
 For a local build with the same OS updates, install Copa 0.15.0 and use Docker
 with its [containerd image store](https://docs.docker.com/engine/storage/containerd/).

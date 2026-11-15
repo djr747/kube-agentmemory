@@ -8,16 +8,19 @@ const match = (severity, versions = [], state = 'not-fixed') => ({
   artifact: { name: 'library' }, vulnerability: { severity, fix: { versions, state } },
 });
 const metadata = { descriptor: { name: 'grype', db: { status: { valid: true } } }, source: { type: 'image' } };
-test('blocks every high or critical finding regardless of fix availability', () => {
+test('reports all findings and blocks only high or critical findings with known fixes', () => {
   const report = { ...metadata, matches: [
-    match('High', ['2.0'], 'fixed'), match('Critical'), match('High', [], 'wont-fix'), match('Medium', ['2.0'], 'fixed'),
+    match('High', ['2.0'], 'fixed'), match('Critical', ['3.0'], 'fixed'),
+    match('Critical'), match('High', [], 'wont-fix'), match('High', [], 'unknown'),
+    match('Medium', ['2.0'], 'fixed'),
   ] };
   const result = evaluateScan(report);
-  assert.equal(result.all.length, 4);
-  assert.deepEqual(result.blocking, report.matches.slice(0, 3));
-  assert.equal(result.unfixed.length, 2);
+  assert.deepEqual(result.all, report.matches);
+  assert.deepEqual(result.high, report.matches.slice(0, 5));
+  assert.deepEqual(result.blocking, report.matches.slice(0, 2));
+  assert.deepEqual(result.unfixed, report.matches.slice(2, 5));
   assert.equal(evaluateScan({ ...metadata, matches: [] }).blocking.length, 0);
-  assert.equal(evaluateScan({ ...metadata, matches: [match('Medium', ['2.0'], 'fixed')] }).blocking.length, 0);
+  assert.equal(evaluateScan({ ...metadata, matches: report.matches.slice(2) }).blocking.length, 0);
 });
 test('fails closed when scanner or fix metadata is missing', () => {
   assert.throws(() => evaluateScan({}), /valid Grype/);
@@ -30,7 +33,7 @@ test('CI and local image scans cover only the application and engine built here'
   const steps = ci.jobs.container.steps;
   const scans = steps.filter((step) => step.uses?.startsWith('anchore/scan-action@'));
   assert.deepEqual(scans.map((step) => step.with.image), ['kube-agentmemory:ci', 'kube-agentmemory-engine:ci']);
-  const gate = steps.find((step) => step.name === 'Block high and critical image vulnerabilities');
+  const gate = steps.find((step) => step.name === 'Block fixable high and critical image vulnerabilities');
   assert.equal(gate.run, 'node tests/security-gate.mjs grype-app.json grype-engine.json');
   assert.equal(gate['continue-on-error'], undefined);
   assert.equal(gate.if, '${{ !cancelled() }}');

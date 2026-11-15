@@ -142,7 +142,7 @@ jobs:
           CHART_ARCHIVE_DIR: dist
           INTEGRATION_CLUSTER: agentmemory-integration-${{ github.run_id }}-${{ matrix.arch }}
         run: make integration
-      - name: Block high and critical image vulnerabilities
+      - name: Block fixable high and critical image vulnerabilities
         # Report both the Ingress result and the blocking scan result on amd64.
         if: ${{ !cancelled() }}
         run: node tests/security-gate.mjs grype-app.json grype-engine.json
