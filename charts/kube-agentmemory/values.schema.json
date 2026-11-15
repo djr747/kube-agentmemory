@@ -45,6 +45,7 @@
     "engine": {
       "type": "object",
       "additionalProperties": false,
+      "required": ["workVolumeSizeLimit"],
       "properties": {
         "image": {
           "type": "object",
@@ -78,6 +79,11 @@
         },
         "resources": {
           "type": "object"
+        },
+        "workVolumeSizeLimit": {
+          "description": "Kubernetes storage quantity for the disk-backed engine work volume.",
+          "type": "string",
+          "minLength": 1
         },
         "shutdownDelaySeconds": {
           "type": "integer",

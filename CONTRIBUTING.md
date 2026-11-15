@@ -58,8 +58,9 @@ and applies the same JavaScript policy gate as CI. Reports are not committed.
 Image scanning covers only images built by this repository. Stock Caddy and
 OAuth2 Proxy images are covered by integration tests but are not scanned here.
 
-`make integration` creates a disposable Kind cluster, deploys the **packaged**
-0.1.2 chart and images built by `make integration-baseline` from Git tag `v0.1.2`.
+`make integration` creates a disposable Kind cluster and deploys the published
+0.1.3 chart downloaded by `make integration-baseline`. Kind pulls the published
+0.1.3 images directly from GHCR.
 It writes a memory and waits for its vector checkpoint, upgrades to the candidate
 on the same PVC, and verifies retrieval, new writes, restarts, and reinstall. It first checks that the Docker-compatible API is reachable with
 `docker info`; when using Podman, start its machine before running the test. Before
@@ -80,7 +81,10 @@ OAuth credentials. Through the UI Service from a separate Pod, it checks
 authenticated HTTP and live memory events, and session reuse across changing
 forwarded headers. It also deploys Traefik and repeats the login and event check
 through the chart’s HTTPS Ingress. It loads the initial snapshot, memory list
-and migrated record detail with WebSocket upgrades explicitly rejected. It verifies bearer-token API
+and migrated record detail with WebSocket upgrades explicitly rejected. With
+1 GiB allocated on the engine work volume, the same ready pod must deliver live
+events and stream heartbeats through HTTPS for at least 90 seconds without a
+restart. It verifies bearer-token API
 access after SSO is enabled. Caddy's loopback-only listener has no Service port.
 It then opts into API OIDC, accepts a signed JWT and rejects invalid tokens and
 the original memory secret on the API Service.

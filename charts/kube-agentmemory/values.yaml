@@ -10,14 +10,15 @@ image:
 imagePullSecrets: []
 engine:
   shutdownDelaySeconds: 5 # Allow the last periodic state-store flush after app shutdown
+  workVolumeSizeLimit: 4Gi # Allow room for iii's trace archive and SQLite maintenance
   image:
     repository: ghcr.io/djr747/kube-agentmemory-engine
     tag: "" # Chart appVersion; Dockerfile.engine preserves the paired iii-sdk pin
     digest: ""
     pullPolicy: IfNotPresent
   resources:
-    requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 50Mi}
-    limits: {cpu: "1", memory: 1Gi, ephemeral-storage: 256Mi}
+    requests: {cpu: 100m, memory: 128Mi, ephemeral-storage: 1Gi}
+    limits: {cpu: "1", memory: 1Gi, ephemeral-storage: 5Gi}
 persistence:
   size: 10Gi
   storageClass: "" # Omitted to use the cluster default; '-' means no class

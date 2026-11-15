@@ -56,10 +56,10 @@ try {
     run('kind', ['create', 'cluster', '--name', cluster, '--wait', '180s']);
   }
   assert.ok(previous.archive && previous.image && previous.engine,
-    'Prepare the 0.1.2 chart and images with make integration-baseline first');
+    'Prepare the 0.1.3 chart with make integration-baseline first');
   assert.notEqual(previous.image, image);
   assert.notEqual(previous.engine, engineImage);
-  run('kind', ['load', 'docker-image', image, engineImage, previous.image, previous.engine, '--name', cluster]);
+  run('kind', ['load', 'docker-image', image, engineImage, '--name', cluster]);
   const ns = capture('kubectl', ['--context', context, 'create', 'namespace', 'agentmemory', '--dry-run=client', '-o', 'yaml']);
   run('kubectl', ['--context', context, 'apply', '-f', '-'], { input: ns, stdio: ['pipe', 'inherit', 'inherit'] });
   run('kubectl', ['--context', context, 'label', 'namespace', 'agentmemory', 'pod-security.kubernetes.io/enforce=restricted', '--overwrite']);
@@ -79,12 +79,13 @@ try {
   function deploy(files, apiListener = 3111, baseline) {
     const imageParts = (baseline?.image ?? image).split(':');
     const engineParts = (baseline?.engine ?? engineImage).split(':');
+    const pullPolicy = baseline ? 'IfNotPresent' : 'Never';
     run('helm', ['upgrade', '--install', 'memory', baseline?.archive ?? archive, '--kube-context', context, '-n', 'agentmemory',
       '--set', 'fullnameOverride=memory', '--set', `image.repository=${imageParts[0]}`,
-      '--set', `image.tag=${imageParts[1]}`, '--set', 'image.pullPolicy=Never', '--set', 'persistence.size=1Gi',
+      '--set', `image.tag=${imageParts[1]}`, '--set', `image.pullPolicy=${pullPolicy}`, '--set', 'persistence.size=1Gi',
       '--set', `service.port=${apiServicePort}`,
       '--set', `engine.image.repository=${engineParts[0]}`, '--set', `engine.image.tag=${engineParts[1]}`,
-      '--set', 'engine.image.pullPolicy=Never',
+      '--set', `engine.image.pullPolicy=${pullPolicy}`,
       ...files.flatMap((file) => ['-f', file]), '--wait', '--timeout', '600s']);
     kube(['rollout', 'status', 'statefulset/memory', '--timeout=600s']);
     kube(['wait', '--for=condition=Ready', 'pod/memory-0', '--timeout=600s']);
@@ -98,8 +99,8 @@ try {
     assert.equal(headless.spec.ports[0].targetPort, apiListener);
   }
   const oldMetadata = parse(capture('helm', ['show', 'chart', previous.archive]));
-  assert.equal(oldMetadata.version, '0.1.2');
-  assert.equal(oldMetadata.appVersion, '0.1.2');
+  assert.equal(oldMetadata.version, '0.1.3');
+  assert.equal(oldMetadata.appVersion, '0.1.3');
   deploy(['examples/local.yaml'], 3111, previous);
   smoke('write');
   kube(['exec', 'memory-0', '-c', 'app', '--', 'node', '-e',
@@ -110,10 +111,10 @@ try {
   const originalClaim = pvcUid();
   const originalPod = uid();
   deploy(['examples/local.yaml']);
-  assert.notEqual(uid(), originalPod, 'Helm upgrade must replace the 0.1.2 pod');
+  assert.notEqual(uid(), originalPod, 'Helm upgrade must replace the previous pod');
   assert.equal(pvcUid(), originalClaim, 'Helm upgrade must keep the original PVC');
   smoke('read', '/data/integration-test.json');
-  console.log('Helm upgrade 0.1.2 to ' + version + ': memory and local vectors recovered on the same PVC');
+  console.log(`Helm upgrade ${oldMetadata.version} to ${version}: memory and local vectors recovered on the same PVC`);
   smoke('write', '/data/integration-new-memory.json', '/integration/candidate');
   smoke('read', '/data/integration-new-memory.json');
   const before = uid();
@@ -190,7 +191,11 @@ try {
         podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], egress: [...defaultEgress,
       { to: [{ podSelector: { matchLabels: { app: 'oidc-fixture' } } }], ports: [{ protocol: 'TCP', port: 8080 }] },
     ] } }));
-  deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues]);
+  const engineWorkValues = join(temp, 'engine-work-values.yaml');
+  writeFileSync(engineWorkValues, stringify({
+    extraVolumeMounts: [{ name: 'engine-work', mountPath: '/test-engine-work' }],
+  }));
+  deploy(['examples/local.yaml', 'examples/traefik-ingress.yaml', oauthValues, engineWorkValues]);
   smoke('read', '/data/integration-test.json'); // Official bearer integrations still work with SSO enabled.
   apiBearerSmoke();
   const migratedMemory = capture('kubectl', ['--context', context, '-n', 'agentmemory', 'exec', 'memory-0',
@@ -199,7 +204,23 @@ try {
     '--input-type=module', '-', ...(ingress ? ['--ingress', migratedMemory] : [])], {
     input: readFileSync('tests/fixtures/oauth-smoke.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
   });
+  const ingressPod = () => {
+    const pod = JSON.parse(capture('kubectl', ['--context', context, '-n', 'agentmemory', 'get', 'pod', 'memory-0', '-o', 'json']));
+    return {
+      uid: pod.metadata.uid,
+      ready: pod.status.conditions?.find((condition) => condition.type === 'Ready')?.status,
+      restarts: Object.fromEntries([...(pod.status.containerStatuses ?? []), ...(pod.status.initContainerStatuses ?? [])]
+        .map(({ name, restartCount }) => [name, restartCount])),
+    };
+  };
+  const beforeDiskLoad = ingressPod();
+  assert.equal(beforeDiskLoad.ready, 'True');
+  kube(['exec', '-i', 'memory-0', '-c', 'app', '--', 'node', '--input-type=module', '-'], {
+    input: readFileSync('tests/fixtures/engine-work-load.mjs'), stdio: ['pipe', 'inherit', 'inherit'],
+  });
   oauthSmoke(true);
+  assert.deepEqual(ingressPod(), beforeDiskLoad, 'Disk load and Ingress traffic must leave the same pod ready without restarts');
+  console.log('Engine work volume: original pod remained ready without restarts under 1 GiB of disk load');
   oauthSmoke();
   // Validate native file options too, including the raw binary cookie key format.
   const oauthFiles = join(temp, 'oauth-files.yaml');

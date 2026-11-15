@@ -286,7 +286,9 @@ spec:
         - name: engine-config
           configMap:
             name: {{ include "agentmemory.fullname" . }}-engine
-        - {name: engine-work, emptyDir: {sizeLimit: 64Mi}}
+        - name: engine-work
+          emptyDir:
+            sizeLimit: {{ .Values.engine.workVolumeSizeLimit | quote }}
         - {name: engine-tmp, emptyDir: {sizeLimit: 64Mi}}
         - {name: app-tmp, emptyDir: {sizeLimit: 256Mi}}
         {{- if .Values.oauth2Proxy.enabled }}
