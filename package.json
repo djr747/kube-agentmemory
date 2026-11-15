@@ -20,7 +20,7 @@
   },
   "dependencies": {
     "@agentmemory/agentmemory": "0.9.33",
-    "dotenv": "18.0.9"
+    "dotenv": "18.0.10"
   },
   "allowScripts": {
     "onnxruntime-node@1.30.0": true,
