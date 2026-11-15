@@ -30,13 +30,14 @@ assert.match(flags.embeddingProvider, /local/);
 let state;
 if (mode === 'write') {
   const marker = `helm-persistence-${Date.now()}`;
+  const project = process.argv[4] || '/integration';
   const result = await json('remember', {
-    content: `${marker} Kubernetes deployment retains memory on a persistent volume.`,
-    type: 'fact', project: '/integration',
+    content: `${marker} The observatory telescope photographs distant galaxies.`,
+    type: 'fact', project,
   });
   assert.equal(result.success, true);
   assert.ok(result.memory.id);
-  state = { marker, id: result.memory.id };
+  state = { marker, id: result.memory.id, project };
   writeFileSync(stateFile, JSON.stringify(state));
 } else {
   assert.equal(mode, 'read');
@@ -55,6 +56,9 @@ for (let attempt = 0; attempt < 120; attempt++) {
 }
 assert.ok(vectorCount > 0, 'local embeddings must produce vector documents');
 assert.ok(checkpointed, 'local vectors must reach a durable checkpoint before restart');
-const search = await json('search', { query: state.marker, project: '/integration', limit: 10 });
+const { memory } = await json(`memories/${encodeURIComponent(state.id)}`);
+assert.equal(memory.id, state.id, 'the durable store must contain the original memory ID');
+assert.ok(memory.content.includes(state.marker), 'the durable store must return the original content');
+const search = await json('search', { query: state.marker, project: state.project || '/integration', limit: 10 });
 assert.ok(JSON.stringify(search).includes(state.id), 'search must return the saved memory');
 console.log(`${mode}: auth, MCP, local embeddings, and persisted memory passed`);

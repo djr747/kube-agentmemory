@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
 import { resolve4 } from 'node:dns/promises';
 // The integration fixture ConfigMap mounts this module at /fixture.
 import { fetchWhenServiceReady } from '/fixture/service-client.mjs';
@@ -26,6 +27,22 @@ await Promise.all(endpoints.map(async (endpoint) => {
   const authenticated = await request(endpoint, tokens.valid);
   assert.equal(authenticated.status, 200, await authenticated.text());
 }));
+const marker = `oidc-api-${randomBytes(8).toString('hex')}`;
+async function memoryRequest(endpoint, path, body) {
+  return fetch(new URL(`/agentmemory/${path}`, endpoint), {
+    method: 'POST', redirect: 'manual',
+    headers: { Host: 'memory.example.com', 'X-Forwarded-Proto': 'https',
+      Authorization: `Bearer ${tokens.valid}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: AbortSignal.timeout(30000),
+  });
+}
+const write = await memoryRequest(endpoints[0], 'remember', { content: marker, type: 'fact', project: '/integration' });
+assert.equal(write.status, 201, 'verified JWT can write memory through the ClusterIP API');
+const id = (await write.json()).memory.id;
+assert.ok(id);
+const search = await memoryRequest(endpoints[1], 'search', { query: marker, project: '/integration', limit: 10 });
+assert.equal(search.status, 200);
+assert.ok(JSON.stringify(await search.json()).includes(id), 'verified JWT can retrieve the written memory through the headless API');
 // Headless DNS resolves the Pod IP: port 3111 would bypass the OIDC proxy if policy failed.
 const addresses = await resolve4('memory-headless.agentmemory.svc.cluster.local');
 assert.ok(addresses.length > 0);
@@ -33,4 +50,5 @@ await assert.rejects(fetch(`http://${addresses[0]}:3111/agentmemory/status`, {
   headers: { Authorization: `Bearer ${memorySecret}` }, signal: AbortSignal.timeout(5000),
 }));
 console.log('ClusterIP and headless OIDC API: valid JWT accepted; missing, memory, expired, wrong-audience/issuer and tampered tokens denied');
+console.log('OIDC API: signed JWT wrote a memory via ClusterIP and retrieved it via the headless Service');
 console.log('NetworkPolicy: direct Pod-IP backend access blocked from the separate client');

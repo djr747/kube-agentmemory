@@ -25,7 +25,7 @@ ENV NODE_ENV=production HOME=/data/home PATH=/nodejs/bin:/usr/bin \
     STANDALONE_PERSIST_PATH=/data/local.db \
     III_ENGINE_URL=ws://127.0.0.1:49134 \
     AGENTMEMORY_URL=http://127.0.0.1:3111 \
-    III_REST_PORT=3111 III_STREAM_PORT=3112 III_VIEWER_PORT=3113 \
+    III_REST_PORT=3111 III_VIEWER_PORT=3113 \
     III_TELEMETRY_ENABLED=false
 WORKDIR /app
 COPY --from=dependencies /app/node_modules ./node_modules

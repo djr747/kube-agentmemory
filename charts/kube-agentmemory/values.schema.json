@@ -84,6 +84,7 @@
           "minimum": 1
         },
         "streamPort": {
+          "description": "Deprecated and ignored: live viewer updates use HTTP SSE.",
           "type": "integer",
           "minimum": 1,
           "maximum": 65535

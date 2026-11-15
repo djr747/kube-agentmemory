@@ -5,49 +5,41 @@ metadata:
   labels:
     {{- include "agentmemory.labels" . | nindent 4 }}
 data:
-  config.yaml: |
-    workers:
-      - name: iii-http
-        config:
+  worker-compose.yaml: |
+    namespace: agentmemory
+    startup_timeout: 300s
+    stop_timeout: 20s
+    required_default: true
+    engine:
+      url: ws://127.0.0.1:49134
+      workers:
+        configuration:
+          adapter:
+            name: fs
+            config:
+              directory: /data/config
+        iii-worker-manager:
+          host: 127.0.0.1
+          port: 49134
+    containers:
+      state:
+        worker: package://api.workers.iii.dev/state
+        version: "0.22.22"
+        config_name: state
+        restart: {condition: on-failure}
+        config_override:
+          adapter:
+            name: kv
+            config:
+              store_method: file_based
+              file_path: /data/state_store.db
+              save_interval_ms: {{ index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" | int }}
+      http:
+        worker: package://api.workers.iii.dev/http
+        version: "0.22.8"
+        config_name: http
+        restart: {condition: on-failure}
+        config_override:
           host: 0.0.0.0
           port: 3111
           default_timeout: 180000
-      - name: iii-worker-manager
-        config:
-          host: 127.0.0.1
-          port: 49134
-      - name: iii-state
-        config:
-          adapter:
-            name: kv
-            config:
-              store_method: file_based
-              save_interval_ms: {{ index .Values.env "AGENTMEMORY_STATE_SAVE_INTERVAL_MS" | default "2000" }}
-              file_path: /data/state_store.db
-      - name: iii-queue
-        config:
-          adapter: {name: builtin}
-      - name: iii-pubsub
-        config:
-          adapter: {name: local}
-      - name: iii-cron
-        config:
-          adapter: {name: kv}
-      - name: iii-stream
-        config:
-          host: 127.0.0.1
-          port: ${III_STREAM_PORT:3112}
-          adapter:
-            name: kv
-            config:
-              store_method: file_based
-              file_path: /data/stream_store
-      - name: iii-observability
-        config:
-          enabled: true
-          service_name: agentmemory
-          exporter: memory
-          sampling_ratio: 0.1
-          metrics_enabled: true
-          logs_enabled: true
-          logs_console_output: false

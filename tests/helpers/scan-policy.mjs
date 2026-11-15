@@ -12,8 +12,10 @@ export function evaluateScan(report) {
   });
   const blocking = high.filter((match) => {
     const fix = match.vulnerability.fix;
-    if (!fix || !Array.isArray(fix.versions)) throw new Error('Missing fix metadata');
-    return fix.versions.length > 0;
+    if (!fix || typeof fix.state !== 'string' || !Array.isArray(fix.versions)) {
+      throw new Error('Missing fix metadata');
+    }
+    return fix.state === 'fixed';
   });
-  return { all: report.matches, high, blocking, unfixed: high.filter((match) => !blocking.includes(match)) };
+  return { all: report.matches, high, blocking, unfixed: high.filter((match) => match.vulnerability.fix.state !== 'fixed') };
 }
