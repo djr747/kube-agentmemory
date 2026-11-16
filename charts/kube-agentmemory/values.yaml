@@ -44,6 +44,44 @@ vault:
   # Generate one raw file per Vault field. These keys must exist in the secret.
   fields: [AGENTMEMORY_SECRET]
   annotations: {}
+llm:
+  provider: "" # Empty selects the provider of a single configured endpoint. Otherwise LLM processing is off.
+  anthropic:
+    endpoint: ""
+    model: ""
+  gemini:
+    model: ""
+  minimax:
+    endpoint: ""
+    model: ""
+  openai:
+    endpoint: ""
+    model: ""
+    reasoningEffort: ""
+    timeoutMs: null
+  openrouter:
+    model: ""
+# Unset values use the legacy env map and its chart defaults below.
+features:
+  autoCompress: null
+  consolidation: null
+  graphExtraction: null
+  slots: null
+  reflection: null
+viewer:
+  allowedOrigins: null
+summarization:
+  chunkSize: null
+  chunkConcurrency: null
+embeddings:
+  provider: null # Defaults to local via env. Set to "" to disable embeddings.
+  openai:
+    endpoint: ""
+    model: ""
+    dimensions: null
+  openrouter:
+    model: ""
+    dimensions: null
 env:
   EMBEDDING_PROVIDER: local
   AGENTMEMORY_AUTO_COMPRESS: "false"

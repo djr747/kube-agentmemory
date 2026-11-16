@@ -1,3 +1,63 @@
+{{- $appEnv := deepCopy .Values.env -}}
+{{- $llm := .Values.llm | default dict -}}
+{{- $provider := $llm.provider -}}
+{{- $endpointProviders := list -}}
+{{- range $name := list "anthropic" "gemini" "minimax" "openai" "openrouter" -}}
+{{- $settings := index $llm $name | default dict -}}
+{{- with $settings.endpoint -}}
+{{- $_ := set $appEnv (printf "%s_BASE_URL" (upper $name)) . -}}
+{{- $endpointProviders = append $endpointProviders $name -}}
+{{- end -}}
+{{- with $settings.model -}}
+{{- $_ := set $appEnv (printf "%s_MODEL" (upper $name)) . -}}
+{{- end -}}
+{{- end -}}
+{{- if not $provider -}}
+{{- if gt (len $endpointProviders) 1 -}}
+{{- fail "Set llm.provider when more than one LLM endpoint is configured" -}}
+{{- end -}}
+{{- $provider = first $endpointProviders -}}
+{{- end -}}
+{{- with $provider -}}
+{{- $_ := set $appEnv "AGENTMEMORY_LLM_PROVIDER" . -}}
+{{- end -}}
+{{- $openai := $llm.openai | default dict -}}
+{{- $features := .Values.features | default dict -}}
+{{- range $key, $value := dict
+    "AGENTMEMORY_AUTO_COMPRESS" $features.autoCompress
+    "CONSOLIDATION_ENABLED" $features.consolidation
+    "GRAPH_EXTRACTION_ENABLED" $features.graphExtraction
+    "AGENTMEMORY_SLOTS" $features.slots
+    "AGENTMEMORY_REFLECT" $features.reflection -}}
+{{- if kindIs "bool" $value -}}
+{{- $_ := set $appEnv $key (toString $value) -}}
+{{- end -}}
+{{- end -}}
+{{- $viewer := .Values.viewer | default dict -}}
+{{- if kindIs "slice" $viewer.allowedOrigins -}}
+{{- $_ := set $appEnv "VIEWER_ALLOWED_ORIGINS" (join "," $viewer.allowedOrigins) -}}
+{{- end -}}
+{{- $summarization := .Values.summarization | default dict -}}
+{{- $embeddings := .Values.embeddings | default dict -}}
+{{- if kindIs "string" $embeddings.provider -}}
+{{- $_ := set $appEnv "EMBEDDING_PROVIDER" $embeddings.provider -}}
+{{- end -}}
+{{- $openaiEmbeddings := $embeddings.openai | default dict -}}
+{{- $openrouterEmbeddings := $embeddings.openrouter | default dict -}}
+{{- range $key, $value := dict
+    "OPENAI_REASONING_EFFORT" $openai.reasoningEffort
+    "OPENAI_TIMEOUT_MS" $openai.timeoutMs
+    "SUMMARIZE_CHUNK_SIZE" $summarization.chunkSize
+    "SUMMARIZE_CHUNK_CONCURRENCY" $summarization.chunkConcurrency
+    "OPENAI_EMBEDDING_BASE_URL" $openaiEmbeddings.endpoint
+    "OPENAI_EMBEDDING_MODEL" $openaiEmbeddings.model
+    "OPENAI_EMBEDDING_DIMENSIONS" $openaiEmbeddings.dimensions
+    "OPENROUTER_EMBEDDING_MODEL" $openrouterEmbeddings.model
+    "OPENROUTER_EMBEDDING_DIMENSIONS" $openrouterEmbeddings.dimensions -}}
+{{- with $value -}}
+{{- $_ := set $appEnv $key (toString .) -}}
+{{- end -}}
+{{- end -}}
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
@@ -22,7 +82,7 @@ spec:
         {{- end }}
       annotations:
         checksum/engine: {{ include (print $.Template.BasePath "/engine-config.yaml") . | sha256sum }}
-        checksum/config: {{ toJson .Values.env | sha256sum }}
+        checksum/config: {{ toJson $appEnv | sha256sum }}
         {{- if .Values.oauth2Proxy.enabled }}
         checksum/caddy: {{ include (print $.Template.BasePath "/caddy-config.yaml") . | sha256sum }}
         {{- end }}
@@ -126,7 +186,7 @@ spec:
             capabilities: {drop: [ALL]}
           env:
             - {name: III_NAMESPACE, value: agentmemory}
-            {{- range $key, $value := .Values.env }}
+            {{- range $key, $value := $appEnv }}
             - name: {{ $key }}
               value: {{ $value | quote }}
             {{- end }}
