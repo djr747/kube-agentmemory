@@ -77,12 +77,11 @@ provider, and [resource sizing](resources.md) for CPU/memory requests and limits
 | Local embeddings (default) | `EMBEDDING_PROVIDER=local` |
 | OpenAI-compatible LLM | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`, `OPENAI_REASONING_EFFORT`, `OPENAI_TIMEOUT_MS` |
 | Dedicated OpenAI-compatible embeddings | `EMBEDDING_PROVIDER=openai`, `OPENAI_EMBEDDING_API_KEY`, `OPENAI_EMBEDDING_BASE_URL`, `OPENAI_EMBEDDING_MODEL`, `OPENAI_EMBEDDING_DIMENSIONS` |
-| Embeddings-only OpenAI key | `OPENAI_API_KEY_FOR_LLM=false` |
 | Anthropic | `ANTHROPIC_API_KEY`, `ANTHROPIC_BASE_URL`, `ANTHROPIC_MODEL` |
 | Gemini | `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `GEMINI_MODEL` |
 | OpenRouter | `OPENROUTER_API_KEY`, `OPENROUTER_MODEL`, `OPENROUTER_EMBEDDING_MODEL` |
 | Other embeddings | `VOYAGE_API_KEY`, `COHERE_API_KEY`, `EMBEDDING_PROVIDER` |
-| MiniMax | `MINIMAX_API_KEY`, `MINIMAX_MODEL` |
+| MiniMax | `MINIMAX_API_KEY`, `MINIMAX_BASE_URL`, `MINIMAX_MODEL` |
 | LLM behavior | `AGENTMEMORY_AUTO_COMPRESS`, `CONSOLIDATION_ENABLED`, `GRAPH_EXTRACTION_ENABLED`, `AGENTMEMORY_REFLECT`, `MAX_TOKENS`, `FALLBACK_PROVIDERS`, `AGENTMEMORY_LLM_TIMEOUT_MS` |
 | Allowed browser origins | `VIEWER_ALLOWED_ORIGINS` (comma-separated HTTPS origins) |
 | Search/context | `BM25_WEIGHT`, `VECTOR_WEIGHT`, `TOKEN_BUDGET`, `MAX_OBS_PER_SESSION` |
@@ -95,9 +94,62 @@ provider, and [resource sizing](resources.md) for CPU/memory requests and limits
 All other upstream settings are accepted through `env`/`extraEnv`/`envFrom`.
 The full reference is the versioned upstream
 [environment example](https://github.com/rohitg00/agentmemory/blob/v0.9.33/.env.example).
-Explicitly set `EMBEDDING_PROVIDER` or `AGENTMEMORY_LLM_PROVIDER` when
-using a cloud provider. A key alone does not enable a cloud provider.
-Local embedding tests require neither an external model runner nor paid APIs.
+Set `llm.provider` to select an LLM provider. The default leaves LLM processing
+off. A single configured custom endpoint selects its provider when
+`llm.provider` is empty. Set `llm.provider` explicitly if more than one custom
+endpoint is configured. Gemini and OpenRouter use the service URLs built into
+AgentMemory.
+
+| Provider | Model value | Custom endpoint | Credential |
+| --- | --- | --- | --- |
+| `anthropic` | `llm.anthropic.model` | `llm.anthropic.endpoint` | `ANTHROPIC_API_KEY` |
+| `gemini` | `llm.gemini.model` | Built in | `GEMINI_API_KEY` or `GOOGLE_API_KEY` |
+| `minimax` | `llm.minimax.model` | `llm.minimax.endpoint` | `MINIMAX_API_KEY` |
+| `openai` | `llm.openai.model` | `llm.openai.endpoint` | `OPENAI_API_KEY` |
+| `openrouter` | `llm.openrouter.model` | Built in | `OPENROUTER_API_KEY` |
+
+```yaml
+llm:
+  openai:
+    endpoint: http://litellm.models.svc.cluster.local:4000/v1
+    model: local-tier1
+```
+
+Supply the selected provider's credential through an existing secret source.
+Set `llm.openai.reasoningEffort` and `llm.openai.timeoutMs` for
+`OPENAI_REASONING_EFFORT` and `OPENAI_TIMEOUT_MS`.
+
+| Helm value | AgentMemory environment variable |
+| --- | --- |
+| `features.autoCompress` | `AGENTMEMORY_AUTO_COMPRESS` |
+| `features.consolidation` | `CONSOLIDATION_ENABLED` |
+| `features.graphExtraction` | `GRAPH_EXTRACTION_ENABLED` |
+| `features.slots` | `AGENTMEMORY_SLOTS` |
+| `features.reflection` | `AGENTMEMORY_REFLECT` |
+| `viewer.allowedOrigins` | `VIEWER_ALLOWED_ORIGINS` (list of HTTP or HTTPS origins) |
+| `summarization.chunkSize` | `SUMMARIZE_CHUNK_SIZE` |
+| `summarization.chunkConcurrency` | `SUMMARIZE_CHUNK_CONCURRENCY` |
+
+Explicit chart values take precedence over matching entries in `env`. Unset
+values inherit the existing configuration. All five feature switches default
+off. Reflection requires slots. Use an empty origin list to clear a legacy
+allowlist and use the upstream loopback defaults.
+
+Choose embeddings independently with `embeddings.provider`. The chart defaults
+to `local`. Set it to `""` to disable embeddings. The chart also accepts
+`openai`, `voyage`, `cohere`, `gemini`, and `openrouter`.
+
+| Embedding provider | Credential | Optional provider settings |
+| --- | --- | --- |
+| `local` | None | Built-in model |
+| `openai` | `OPENAI_EMBEDDING_API_KEY` or `OPENAI_API_KEY` | `embeddings.openai.endpoint`, `.model`, and `.dimensions` |
+| `voyage` | `VOYAGE_API_KEY` | Built-in endpoint and model |
+| `cohere` | `COHERE_API_KEY` | Built-in endpoint and model |
+| `gemini` | `GEMINI_API_KEY` | Built-in endpoint and model |
+| `openrouter` | `OPENROUTER_API_KEY` | `embeddings.openrouter.model` and `.dimensions` |
+
+OpenAI embeddings use `OPENAI_BASE_URL` when the embedding-specific endpoint
+is unset. See the [external provider example](../examples/external-provider.yaml).
 
 The upstream API validates one bearer secret per server instance. For distinct
 credentials per agent, use a separate Helm release for each agent, with its own

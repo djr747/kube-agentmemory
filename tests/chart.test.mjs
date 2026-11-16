@@ -19,6 +19,11 @@ function render(args = [], expectSuccess = true) {
   }).filter(Boolean);
 }
 const auth = ['--set', 'secrets.existingSecret=auth'];
+function appConfig(args = []) {
+  const { spec, metadata } = render([...auth, ...args]).find((m) => m.kind === 'StatefulSet').spec.template;
+  const env = spec.containers.find((container) => container.name === 'app').env;
+  return { env: Object.fromEntries(env.map((entry) => [entry.name, entry.value])), checksum: metadata.annotations['checksum/config'] };
+}
 test('single writer, retained storage, restricted containers and private engine ports', () => {
   const manifests = render(auth);
   const sts = manifests.find((m) => m.kind === 'StatefulSet');
@@ -64,6 +69,96 @@ test('single writer, retained storage, restricted containers and private engine 
   const net = manifests.find((m) => m.kind === 'NetworkPolicy');
   assert.deepEqual(net.spec.policyTypes, ['Ingress', 'Egress']);
   assert.deepEqual(net.spec.ingress[0].ports, [{ protocol: 'TCP', port: 3111 }]);
+});
+test('chart LLM values opt in to each supported provider and render its settings', () => {
+  const defaults = appConfig([]);
+  assert.equal(defaults.env.AGENTMEMORY_LLM_PROVIDER, undefined);
+  assert.equal(defaults.env.OPENAI_BASE_URL, undefined);
+  const endpoint = 'http://model.example.test:4000/v1';
+  for (const provider of ['anthropic', 'gemini', 'minimax', 'openai', 'openrouter']) {
+    const key = provider.toUpperCase();
+    const model = `${provider}-test-model`;
+    const modelSetting = `llm.${provider}.model=${model}`;
+    const hasCustomEndpoint = ['anthropic', 'minimax', 'openai'].includes(provider);
+    const selection = hasCustomEndpoint ? `llm.${provider}.endpoint=${endpoint}` : `llm.provider=${provider}`;
+    const configured = appConfig(['--set', selection, '--set', modelSetting]);
+    assert.equal(configured.env.AGENTMEMORY_LLM_PROVIDER, provider);
+    assert.equal(configured.env[`${key}_MODEL`], model);
+    if (hasCustomEndpoint) assert.equal(configured.env[`${key}_BASE_URL`], endpoint);
+  }
+  const optedIn = appConfig(['--set', `llm.openai.endpoint=${endpoint}`, '--set', 'llm.openai.model=local-tier1',
+    '--set', 'env.OPENAI_BASE_URL=http://old.example.test/v1', '--set', 'env.AGENTMEMORY_LLM_PROVIDER=anthropic']);
+  assert.equal(optedIn.env.AGENTMEMORY_LLM_PROVIDER, 'openai');
+  assert.equal(optedIn.env.OPENAI_BASE_URL, endpoint);
+  assert.equal(optedIn.env.OPENAI_MODEL, 'local-tier1');
+  assert.notEqual(optedIn.checksum, defaults.checksum);
+  assert.equal(appConfig(['--set', 'env.AGENTMEMORY_LLM_PROVIDER=gemini']).env.AGENTMEMORY_LLM_PROVIDER, 'gemini');
+  assert.equal(appConfig(['--set', `env.OPENAI_BASE_URL=${endpoint}`]).env.AGENTMEMORY_LLM_PROVIDER, undefined);
+  assert.equal(appConfig(['--set', 'llm.gemini.model=gemini-test']).env.AGENTMEMORY_LLM_PROVIDER, undefined);
+  const twoEndpoints = ['--set', `llm.openai.endpoint=${endpoint}`, '--set', 'llm.anthropic.endpoint=https://alternate.example.test'];
+  assert.match(render([...auth, ...twoEndpoints], false), /Set llm.provider when more than one LLM endpoint is configured/);
+  const explicit = appConfig([...twoEndpoints, '--set', 'llm.provider=anthropic']);
+  assert.equal(explicit.env.AGENTMEMORY_LLM_PROVIDER, 'anthropic');
+  assert.equal(explicit.env.OPENAI_BASE_URL, endpoint);
+  assert.equal(explicit.env.ANTHROPIC_BASE_URL, 'https://alternate.example.test');
+  assert.match(render([...auth, '--set', 'llm.openai.endpoint=ftp://model.example.test'], false), /llm.openai.endpoint/);
+  assert.match(render([...auth, '--set', `llm.gemini.endpoint=${endpoint}`], false), /endpoint/);
+  assert.match(render([...auth, '--set', `llm.openrouter.endpoint=${endpoint}`], false), /endpoint/);
+});
+test('typed request, feature, viewer and summary settings preserve the effective environment', () => {
+  const legacy = appConfig([
+    '--set-string', 'env.OPENAI_REASONING_EFFORT=none,env.OPENAI_TIMEOUT_MS=90000',
+    '--set-string', 'env.AGENTMEMORY_AUTO_COMPRESS=true,env.CONSOLIDATION_ENABLED=true',
+    '--set-string', 'env.AGENTMEMORY_SLOTS=true,env.AGENTMEMORY_REFLECT=true',
+    '--set-string', 'env.SUMMARIZE_CHUNK_SIZE=64,env.SUMMARIZE_CHUNK_CONCURRENCY=1',
+    '--set-string', 'env.VIEWER_ALLOWED_ORIGINS=https://memory.example.test\\,https://viewer.example.test'
+  ]);
+  const typed = appConfig([
+    '--set', 'llm.openai.reasoningEffort=none,llm.openai.timeoutMs=90000',
+    '--set', 'features.autoCompress=true,features.consolidation=true,features.graphExtraction=false',
+    '--set', 'features.slots=true,features.reflection=true',
+    '--set', 'summarization.chunkSize=64,summarization.chunkConcurrency=1',
+    '--set-json', 'viewer.allowedOrigins=["https://memory.example.test","https://viewer.example.test"]'
+  ]);
+  assert.deepEqual(typed, legacy);
+  assert.equal(typed.env.AGENTMEMORY_LLM_PROVIDER, undefined);
+  assert.notEqual(typed.checksum, appConfig().checksum);
+  const overrides = appConfig([
+    '--set-string', 'env.GRAPH_EXTRACTION_ENABLED=true,env.VIEWER_ALLOWED_ORIGINS=https://old.example.test',
+    '--set', 'features.graphExtraction=false',
+    '--set-json', 'viewer.allowedOrigins=[]'
+  ]);
+  assert.equal(overrides.env.GRAPH_EXTRACTION_ENABLED, 'false');
+  assert.equal(overrides.env.VIEWER_ALLOWED_ORIGINS, '');
+  assert.match(render([...auth, '--set-string', 'features.autoCompress=true'], false), /features.autoCompress/);
+  assert.match(render([...auth, '--set', 'summarization.chunkConcurrency=0'], false), /summarization.chunkConcurrency/);
+  assert.match(render([...auth, '--set', 'llm.openai.timeoutMs=-1'], false), /llm.openai.timeoutMs/);
+  assert.match(render([...auth, '--set-json', 'viewer.allowedOrigins=["*"]'], false), /viewer.allowedOrigins/);
+});
+test('embedding providers and their overrides are independent of LLM provider selection', () => {
+  assert.equal(appConfig().env.EMBEDDING_PROVIDER, 'local');
+  assert.equal(appConfig(['--set', 'env.EMBEDDING_PROVIDER=gemini']).env.EMBEDDING_PROVIDER, 'gemini');
+  for (const provider of ['local', 'openai', 'gemini', 'openrouter', 'voyage', 'cohere', '']) {
+    const { env } = appConfig(['--set-string', `embeddings.provider=${provider}`]);
+    assert.equal(env.EMBEDDING_PROVIDER, provider);
+    assert.equal(env.AGENTMEMORY_LLM_PROVIDER, undefined);
+  }
+  const { env } = appConfig([
+    '--set', 'llm.provider=gemini,embeddings.provider=openai',
+    '--set', 'embeddings.openai.endpoint=https://vectors.example.test/v1,embeddings.openai.model=custom',
+    '--set', 'embeddings.openai.dimensions=1024',
+    '--set', 'embeddings.openrouter.model=openai/text-embedding-3-small,embeddings.openrouter.dimensions=1536'
+  ]);
+  assert.equal(env.AGENTMEMORY_LLM_PROVIDER, 'gemini');
+  assert.equal(env.EMBEDDING_PROVIDER, 'openai');
+  assert.equal(env.OPENAI_EMBEDDING_BASE_URL, 'https://vectors.example.test/v1');
+  assert.equal(env.OPENAI_EMBEDDING_MODEL, 'custom');
+  assert.equal(env.OPENAI_EMBEDDING_DIMENSIONS, '1024');
+  assert.equal(env.OPENROUTER_EMBEDDING_MODEL, 'openai/text-embedding-3-small');
+  assert.equal(env.OPENROUTER_EMBEDDING_DIMENSIONS, '1536');
+  assert.equal(env.OPENAI_BASE_URL, undefined);
+  assert.match(render([...auth, '--set', 'embeddings.provider=unsupported'], false), /embeddings.provider/);
+  assert.match(render([...auth, '--set', 'embeddings.openai.dimensions=0'], false), /embeddings.openai.dimensions/);
 });
 test('engine work volume and ephemeral-storage budget accept overrides', () => {
   const manifests = render([...auth, '--set', 'engine.workVolumeSizeLimit=8Gi',

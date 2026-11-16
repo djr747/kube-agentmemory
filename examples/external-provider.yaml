@@ -1,9 +1,13 @@
 # Overlay on examples/vault.yaml. API keys are Vault fields, never values here.
 vault:
   fields: [AGENTMEMORY_SECRET, OPENAI_API_KEY]
-env:
-  EMBEDDING_PROVIDER: openai
-  OPENAI_BASE_URL: https://api.openai.com
-  OPENAI_MODEL: replace-with-your-chat-model
-  OPENAI_EMBEDDING_MODEL: text-embedding-3-small
-  AGENTMEMORY_AUTO_COMPRESS: "true"
+llm:
+  provider: openai
+  openai:
+    model: replace-with-your-chat-model
+embeddings:
+  provider: openai
+  openai:
+    model: text-embedding-3-small
+features:
+  autoCompress: true

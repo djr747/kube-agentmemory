@@ -2,6 +2,34 @@
   "$schema": "http://json-schema.org/draft-07/schema#",
   "type": "object",
   "additionalProperties": false,
+  "definitions": {
+    "optionalPositiveInteger": {
+      "type": ["integer", "null"],
+      "minimum": 1
+    },
+    "optionalBoolean": {
+      "type": ["boolean", "null"]
+    },
+    "endpoint": {
+      "type": "string",
+      "pattern": "^$|^https?://[^\\s]+$"
+    },
+    "llmModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "model": { "type": "string" }
+      }
+    },
+    "llmEndpointAndModel": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "endpoint": { "$ref": "#/definitions/endpoint" },
+        "model": { "type": "string" }
+      }
+    }
+  },
   "properties": {
     "nameOverride": {
       "type": "string"
@@ -224,6 +252,85 @@
         },
         "annotations": {
           "type": "object"
+        }
+      }
+    },
+    "llm": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "enum": ["", "anthropic", "openai", "gemini", "openrouter", "minimax"]
+        },
+        "anthropic": { "$ref": "#/definitions/llmEndpointAndModel" },
+        "gemini": { "$ref": "#/definitions/llmModel" },
+        "minimax": { "$ref": "#/definitions/llmEndpointAndModel" },
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": { "$ref": "#/definitions/endpoint" },
+            "model": { "type": "string" },
+            "reasoningEffort": { "enum": ["", "none", "low", "medium", "high"] },
+            "timeoutMs": { "$ref": "#/definitions/optionalPositiveInteger" }
+          }
+        },
+        "openrouter": { "$ref": "#/definitions/llmModel" }
+      }
+    },
+    "features": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "autoCompress": { "$ref": "#/definitions/optionalBoolean" },
+        "consolidation": { "$ref": "#/definitions/optionalBoolean" },
+        "graphExtraction": { "$ref": "#/definitions/optionalBoolean" },
+        "slots": { "$ref": "#/definitions/optionalBoolean" },
+        "reflection": { "$ref": "#/definitions/optionalBoolean" }
+      }
+    },
+    "viewer": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "allowedOrigins": {
+          "type": ["array", "null"],
+          "items": {
+            "type": "string",
+            "pattern": "^https?://(\\[[0-9a-fA-F:]+\\]|[a-zA-Z0-9.-]+)(:[0-9]+)?$"
+          }
+        }
+      }
+    },
+    "summarization": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "chunkSize": { "$ref": "#/definitions/optionalPositiveInteger" },
+        "chunkConcurrency": { "$ref": "#/definitions/optionalPositiveInteger" }
+      }
+    },
+    "embeddings": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "provider": { "enum": [null, "", "local", "openai", "voyage", "cohere", "gemini", "openrouter"] },
+        "openai": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "endpoint": { "$ref": "#/definitions/endpoint" },
+            "model": { "type": "string" },
+            "dimensions": { "$ref": "#/definitions/optionalPositiveInteger" }
+          }
+        },
+        "openrouter": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "model": { "type": "string" },
+            "dimensions": { "$ref": "#/definitions/optionalPositiveInteger" }
+          }
         }
       }
     },

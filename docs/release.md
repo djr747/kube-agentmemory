@@ -46,6 +46,13 @@ volume defaults to 4 GiB and can be overridden with `engine.workVolumeSizeLimit`
 Custom resource overlays should leave room for container logs and temporary
 files. See [resource sizing](resources.md).
 
+For 0.1.5, select an LLM through the [provider values](configuration.md).
+For an OpenAI-compatible deployment, set `llm.openai.endpoint` and
+`llm.openai.model`. The legacy graph may need a separate index
+build. If `GET /agentmemory/graph/index` reports `needs-migration`, follow the
+[AgentMemory graph migration guide](https://github.com/rohitg00/agentmemory/blob/v0.9.33/docs/reliability/graph-index-migration.md)
+during maintenance.
+
 After CI succeeds on main, the reusable release workflow:
 
 1. Checks the source revision and remote release state. An existing `vX.Y.Z`
@@ -83,9 +90,9 @@ For both image repositories, the next release aliases are:
 
 | Tag | Purpose |
 | --- | --- |
-| `0.1.4` | Project release; the chart's default |
+| `0.1.5` | Project release; the chart's default |
 | `0.1` / `0` | Moving minor/major aliases |
-| `0.1.4-agentmemory0.9.33-iii0.25.1` | Project plus exact upstream agentmemory/iii versions |
+| `0.1.5-agentmemory0.9.33-iii0.25.1` | Project plus exact upstream agentmemory/iii versions |
 | `latest` | Most recently published successful main release |
 | `sha-COMMIT-amd64` / `sha-COMMIT-arm64` | Exact architecture candidates |
 

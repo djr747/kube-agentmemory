@@ -186,7 +186,8 @@ try {
     uiHost: 'memory-ui.example.com', redirectUrl: 'https://memory-ui.example.com/oauth2/callback', emailDomains: ['test.example'],
     allowedGroups: ['agentmemory-users'], existingSecret: 'oauth-integration', tlsSecretName: 'integration-ingress-tls' },
     ingress: { tlsSecretName: 'integration-ingress-tls' },
-    env: { VIEWER_ALLOWED_ORIGINS: 'https://memory-ui.example.com' }, networkPolicy: {
+    embeddings: { provider: 'local' },
+    viewer: { allowedOrigins: ['https://memory-ui.example.com'] }, networkPolicy: {
       ingressFrom: [{ podSelector: {} }, { namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'traefik' } },
         podSelector: { matchLabels: { 'app.kubernetes.io/name': 'traefik' } } }], egress: [...defaultEgress,
       { to: [{ podSelector: { matchLabels: { app: 'oidc-fixture' } } }], ports: [{ protocol: 'TCP', port: 8080 }] },

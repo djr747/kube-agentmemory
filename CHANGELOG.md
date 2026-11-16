@@ -1,5 +1,11 @@
 # Changelog
 
+## [0.1.5] - 2026-11-15
+
+- Add Helm model values for OpenAI, Anthropic, Gemini, MiniMax, and OpenRouter, with custom endpoint values for OpenAI, Anthropic, and MiniMax. Keep LLM processing off by default.
+- Add typed Helm values for OpenAI request settings, memory features, viewer origins, summary batching, and embedding providers. Keep existing environment-based configuration compatible.
+- Document the graph index migration required for legacy stores where the viewer graph appears empty after upgrading AgentMemory.
+
 ## [0.1.4] - 2026-11-15
 
 - Prevent pod eviction as iii's trace archive grows. Default the configurable `engine.workVolumeSizeLimit` to 4 GiB and raise the engine's ephemeral-storage budget.
